@@ -1,0 +1,22 @@
+# 実値は入れない。コピーして application.yml にするか、環境変数で上書きする。
+server:
+  port: ${PORT:8080}
+
+spring:
+  application:
+    name: solitaire-server
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  flyway:
+    enabled: true
+
+solitaire:
+  jwt:
+    access-secret: ${JWT_ACCESS_SECRET}
+    refresh-secret: ${JWT_REFRESH_SECRET}
+
+logging:
+  pattern:
+    console: "%d{ISO8601} %-5level %logger{36} - %msg%n"

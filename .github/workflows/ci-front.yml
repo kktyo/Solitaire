@@ -1,0 +1,31 @@
+name: ci-front
+on:
+  push:
+    paths:
+      - "code/front/**"
+      - "doc/03.設計/fixtures/**"
+      - ".github/workflows/ci-front.yml"
+  pull_request:
+    paths:
+      - "code/front/**"
+      - "doc/03.設計/fixtures/**"
+      - ".github/workflows/ci-front.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Flutter tests
+        working-directory: code/front
+        run: |
+          flutter pub get
+          flutter test
+      - name: APK (unsigned)
+        working-directory: code/front
+        run: flutter build apk --debug --dart-define=API_BASE_URL=http://127.0.0.1:8080
+        continue-on-error: true

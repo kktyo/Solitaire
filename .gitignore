@@ -1,0 +1,46 @@
+# build
+.gradle/
+**/build/
+
+# IDE
+**/.idea/
+**/*.iml
+**/.vscode/
+.DS_Store
+
+# Flutter
+**/.dart_tool/
+code/front/.flutter-plugins
+code/front/.flutter-plugins-dependencies
+
+# 接続情報・秘密（実ファイルはコミットしない。*.example のみ可）
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+**/application.yml
+**/application.yaml
+**/application-*.yml
+**/application-*.yaml
+!**/application.yml.example
+!**/application.yaml.example
+!**/application-*.yml.example
+!**/application-*.yaml.example
+
+**/secrets.yml
+**/secrets.yaml
+**/secrets.json
+**/*credentials*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.jks
+**/*.pfx
+**/local.settings.json
+infra/*.parameters.json
+infra/parameters*.json
+
+*.log

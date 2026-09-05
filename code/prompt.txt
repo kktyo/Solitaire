@@ -1,0 +1,94 @@
+# やりたいこと
+`ソリティア/doc` の業務要件・システム要件・設計を正本として、製造・単体テスト・結合テスト・CI/CD・本番相当のサーバ配備まで行う。
+仕様と実装が食い違ったら **実装を仕様に合わせる**。仕様変更が必要なら先に `doc` を改訂してからコードを変える。
+
+# 正本（必読）
+実装前に次を読み、契約（パス・JSON・状態・画面 ID）は要件、内部構造は設計に従う。
+
+| 文書 | 役割 |
+| --- | --- |
+| `doc/01.業務要件定義/業務要件定義.md` | 何を実現するか、受入の業務条件 |
+| `doc/02.システム要件定義/システム要件定義.md` | 構成・同期・認証・非機能 |
+| `doc/02.システム要件定義/API.md` | REST 契約 |
+| `doc/02.システム要件定義/DB.md` | テーブル |
+| `doc/02.システム要件定義/画面一覧.md` | 画面・遷移 |
+| `doc/03.設計/設計.md` | 総則・シーケンス・配置 |
+| `doc/03.設計/サーバ設計.md` | Spring Boot |
+| `doc/03.設計/フロント設計.md` | Flutter |
+| `doc/03.設計/規則エンジン設計.md` | 合法判定 |
+| `doc/03.設計/fixtures/rules_vectors.json` | 規則エンジンの共通テストベクタ |
+
+本フェーズの対象外（ゲスト保存、ランキング公開、Draw 3、Web 専用クライアント等）は作らない。
+
+# 成果物の配置
+```
+ソリティア/
+  doc/                 仕様・設計（変更しない。矛盾時のみ改訂）
+  code/
+    front/             Flutter プロジェクトルート
+    server/            Spring Boot（Gradle, Java 21）プロジェクトルート
+    docker/            開発用 Compose とサーバ用 Dockerfile
+```
+
+# 技術スタック
+- フロント: Flutter（本時点の最新安定版）、iOS 16+ / Android API 26+、縦向きスマートフォン、UI は日本語
+- サーバ: Spring Boot 3 / Java 21 / REST / JSON、パッケージ `com.solitaire`
+- DB: SQL Server。マイグレーションは Flyway
+- 通信: 本番相当は HTTPS。開発は HTTP 可。ベースパス `/api/v1`
+- 正本はサーバ。規則エンジンは Java と Dart で二重実装し、同一ベクタで揃える（共有バイナリは作らない）
+
+# 製造の条件
+
+## Docker
+- ローカル開発は Docker Compose で SQL Server と API を起動できること
+- API はコンテナでビルド・実行できること（本番 App Service へ同じイメージを載せる前提）
+- 秘密（DB パスワード、JWT 鍵）は環境変数。リポジトリに平文で置かない
+- 開発起動順: SQL Server → マイグレーション → API → Flutter（`API_BASE_URL` を開発ホストへ）
+
+## 単体テスト
+- サーバ: **JUnit 5**（Spring Boot Test）。`domain.game` は規則エンジン設計のベクタすべて必須。application / api はサーバ設計 7 章の必須項目を満たす
+- フロント: **flutter_test**。規則エンジンは同一 JSON ベクタ必須。楽観更新の二重送信が起きないことをテストする
+- ベクタの正は `doc/03.設計/fixtures/`。front / server からコピーまたは相対参照する
+
+## 結合テスト
+クライアントは Flutter モバイルであり Web 画面はない。結合は次とする（Playwright は使わない）。
+
+- サーバ: Testcontainers の SQL Server（使えなければ Compose の SQL Server プロファイル）に対する API 結合テスト
+  - 登録〜ログイン〜新規対局〜合法手〜不正手 422（DB 不変）〜アンドゥ〜クリアで `game_results` 1 行
+  - 未認証 401、版ずれ 409、やり直し後の `GET /games/current` が新対局のみ
+- フロント: `integration_test` でログイン〜対局画面入場〜合法操作の主要経路（API はローカル／モック方針を README に明記）
+- 最初の結合条件: ローカルで対局〜保存〜再開が通ること（設計 5.5）
+
+## CI/CD（GitHub Actions）
+- `code/server`: ビルド、JUnit、（可能な範囲で）Testcontainers 結合
+- `code/front`: `flutter test`（および CI で実行可能な integration_test）
+- 成功時: サーバ Docker イメージをビルドし、Azure App Service へデプロイ
+- スロット: **staging にデプロイ → 検証後に production へスワップ**
+- 秘密は GitHub Secrets / App Service 設定。成果物にトークン・接続文字列を埋め込まない
+- フロントのストア提出は本フェーズ必須としない。CI では APK（または相当）のビルドまででよい
+
+## サーバ配備（Azure App Service）
+- **App Service Plan**（Linux、コンテナ）に API を載せる
+- **デプロイスロット**（少なくとも production / staging）で無停止に近い入替ができること
+- **自動スケール**（CPU またはリクエストに基づくインスタンス増減）を Plan で有効にする
+- JWT はステートレス。スケールアウトしてもセッションストアは導入しない（設計どおり）
+- 同一 `gameId` の更新直列は DB 行ロックと `version` 楽観排他で担保する（分散ロックは導入しない）
+- DB は Azure SQL Database（または同等の SQL Server）。接続は SSL、設定は App Settings
+- 本番相当は HTTPS 終端。健康確認用の軽量エンドポイントを用意し、スロット検証とスケール判定に使えるようにする
+
+# 実装時の注意
+- API 名・JSON・エラー `code`・画面 ID（SC-*）を設計書から勝手に変えない
+- 経過時間はサーバ時計のみ。クライアントから `elapsedMs` を申告する API は作らない
+- クライアントは配札内容を指定できない
+- パスワードは BCrypt。リフレッシュトークンはハッシュ保存
+- ログにパスワード・Authorization・refresh 生値・盤面全文を出さない
+- 設計の「本フェーズは単一インスタンス」はセッションストア不要の意味。App Service の複数インスタンスは上記のとおり許容する
+
+# 完了条件
+業務要件 12 章およびシステム要件 9 章を満たすこと。加えて:
+
+1. `docker compose` で SQL Server + API が起動し、マイグレーション済みになる
+2. サーバ JUnit / フロント flutter_test が CI で緑
+3. GitHub Actions から staging スロットへデプロイできる
+4. App Service Plan でスロット運用と自動スケールが設定されている
+5. ログイン利用者が Klondike Draw 1 をプレイし、保存・再開・クリア結果がサーバ正本と一致する

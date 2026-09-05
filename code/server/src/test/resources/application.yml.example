@@ -1,0 +1,5 @@
+# テスト用。本番の接続先・鍵は書かない。
+solitaire:
+  jwt:
+    access-secret: ${JWT_ACCESS_SECRET:}
+    refresh-secret: ${JWT_REFRESH_SECRET:}

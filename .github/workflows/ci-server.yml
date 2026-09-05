@@ -1,0 +1,29 @@
+name: ci-server
+on:
+  push:
+    paths:
+      - "code/server/**"
+      - "code/docker/**"
+      - "doc/03.設計/fixtures/**"
+      - ".github/workflows/ci-server.yml"
+  pull_request:
+    paths:
+      - "code/server/**"
+      - "code/docker/**"
+      - "doc/03.設計/fixtures/**"
+      - ".github/workflows/ci-server.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: gradle
+          cache-dependency-path: code/server/build.gradle
+      - name: Unit and integration tests
+        working-directory: code/server
+        run: ./gradlew test --no-daemon
