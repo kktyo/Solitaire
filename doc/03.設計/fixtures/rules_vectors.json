@@ -1,0 +1,387 @@
+{
+  "version": 1,
+  "note": "Board は API スキーマ。legal=false のケースは expect なし。TV-DEAL は Deal 実装側で別アサーション。",
+  "vectors": [
+    {
+      "id": "TV-TAB-KING-OK",
+      "description": "空の場札列へ K を 1 枚置ける",
+      "board": {
+        "tableau": [
+          [{ "id": "KS", "faceUp": true }],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "boardNote": "本ベクタは 52 枚不変を満たさない簡易盤。ユニットはオプション flag skipFullDeck を見てよいか、実装テストでは完全デッキを使うこと。本ファイルの簡易盤はルール分岐専用。",
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 0 },
+        "to": { "pile": "TABLEAU", "index": 1 },
+        "count": 1
+      },
+      "legal": true,
+      "skipFullDeckInvariant": true,
+      "expect": {
+        "cleared": false,
+        "tableau0Empty": true,
+        "tableau1Top": "KS"
+      }
+    },
+    {
+      "id": "TV-TAB-KING-NG",
+      "description": "空列へ Q は置けない",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [{ "id": "QH", "faceUp": true }],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 0 },
+        "to": { "pile": "TABLEAU", "index": 1 },
+        "count": 1
+      },
+      "legal": false
+    },
+    {
+      "id": "TV-TAB-SEQ",
+      "description": "色違い降順なら場札へ 1 枚置ける",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [{ "id": "KH", "faceUp": true }],
+          [{ "id": "QS", "faceUp": true }],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 1 },
+        "to": { "pile": "TABLEAU", "index": 0 },
+        "count": 1
+      },
+      "legal": true,
+      "expect": { "cleared": false, "tableau0Len": 2, "tableau0Top": "QS" }
+    },
+    {
+      "id": "TV-TAB-SAME-COLOR-NG",
+      "description": "同色では場札に置けない",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [{ "id": "KH", "faceUp": true }],
+          [{ "id": "QD", "faceUp": true }],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 1 },
+        "to": { "pile": "TABLEAU", "index": 0 },
+        "count": 1
+      },
+      "legal": false
+    },
+    {
+      "id": "TV-FOUND-A",
+      "description": "空のスペード組札へ AS",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [{ "id": "AS", "faceUp": true }],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 0 },
+        "to": { "pile": "FOUNDATION", "index": 0 },
+        "count": 1
+      },
+      "legal": true,
+      "expect": { "cleared": false, "foundationSTop": "AS" }
+    },
+    {
+      "id": "TV-FOUND-A-WRONG-SUIT",
+      "description": "ハート枠へ AS は不可",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [{ "id": "AS", "faceUp": true }],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 0 },
+        "to": { "pile": "FOUNDATION", "index": 1 },
+        "count": 1
+      },
+      "legal": false
+    },
+    {
+      "id": "TV-FOUND-UP",
+      "description": "組札へ同一スート +1",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [{ "id": "2S", "faceUp": true }],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": {
+          "S": [{ "id": "AS", "faceUp": true }],
+          "H": [],
+          "D": [],
+          "C": []
+        },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 0 },
+        "to": { "pile": "FOUNDATION", "index": 0 },
+        "count": 1
+      },
+      "legal": true,
+      "expect": { "cleared": false, "foundationSLen": 2 }
+    },
+    {
+      "id": "TV-FOUND-MULTI",
+      "description": "組札へ 2 枚まとめては不可",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [
+            { "id": "2H", "faceUp": true },
+            { "id": "AS", "faceUp": true }
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 0 },
+        "to": { "pile": "FOUNDATION", "index": 0 },
+        "count": 2
+      },
+      "legal": false
+    },
+    {
+      "id": "TV-DRAW",
+      "description": "山札 1 枚をめくり捨て札へ表にする",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [[], [], [], [], [], [], []],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [
+          { "id": "3C", "faceUp": false },
+          { "id": "4C", "faceUp": false }
+        ],
+        "waste": []
+      },
+      "move": { "type": "DRAW" },
+      "legal": true,
+      "expect": {
+        "cleared": false,
+        "stockLen": 1,
+        "wasteTop": "3C",
+        "wasteTopFaceUp": true
+      }
+    },
+    {
+      "id": "TV-RECYCLE",
+      "description": "捨て札を逆順・裏にして山札へ",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [[], [], [], [], [], [], []],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": [
+          { "id": "AH", "faceUp": true },
+          { "id": "2H", "faceUp": true },
+          { "id": "3H", "faceUp": true }
+        ]
+      },
+      "move": { "type": "RECYCLE" },
+      "legal": true,
+      "expect": {
+        "cleared": false,
+        "wasteLen": 0,
+        "stockIds": ["3H", "2H", "AH"],
+        "stockAllFaceDown": true
+      }
+    },
+    {
+      "id": "TV-RECYCLE-NG",
+      "description": "山札が残っていると Recycle 不可",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [[], [], [], [], [], [], []],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [{ "id": "4H", "faceUp": false }],
+        "waste": [{ "id": "AH", "faceUp": true }]
+      },
+      "move": { "type": "RECYCLE" },
+      "legal": false
+    },
+    {
+      "id": "TV-FACE-DOWN",
+      "description": "裏の場札は動かせない",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [
+            { "id": "KS", "faceUp": false },
+            { "id": "QH", "faceUp": true }
+          ],
+          [],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 0 },
+        "to": { "pile": "TABLEAU", "index": 1 },
+        "count": 2
+      },
+      "legal": false
+    },
+    {
+      "id": "TV-WASTE-ONE",
+      "description": "捨て札から count=2 は不可",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [[], [], [], [], [], [], []],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": [
+          { "id": "AH", "faceUp": true },
+          { "id": "2C", "faceUp": true }
+        ]
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "WASTE", "index": 0 },
+        "to": { "pile": "TABLEAU", "index": 0 },
+        "count": 2
+      },
+      "legal": false
+    },
+    {
+      "id": "TV-FLIP",
+      "description": "場札を動かしたあと新しいトップが裏なら表にする",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [
+          [
+            { "id": "7C", "faceUp": false },
+            { "id": "6H", "faceUp": true }
+          ],
+          [{ "id": "7S", "faceUp": true }],
+          [],
+          [],
+          [],
+          [],
+          []
+        ],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": []
+      },
+      "move": {
+        "type": "MOVE",
+        "from": { "pile": "TABLEAU", "index": 0 },
+        "to": { "pile": "TABLEAU", "index": 1 },
+        "count": 1
+      },
+      "legal": true,
+      "expect": {
+        "cleared": false,
+        "tableau0Top": "7C",
+        "tableau0TopFaceUp": true,
+        "tableau1Top": "6H"
+      }
+    },
+    {
+      "id": "TV-DRAW-EMPTY",
+      "description": "山札空の DRAW は不可",
+      "skipFullDeckInvariant": true,
+      "board": {
+        "tableau": [[], [], [], [], [], [], []],
+        "foundations": { "S": [], "H": [], "D": [], "C": [] },
+        "stock": [],
+        "waste": [{ "id": "AH", "faceUp": true }]
+      },
+      "move": { "type": "DRAW" },
+      "legal": false
+    }
+  ]
+}
