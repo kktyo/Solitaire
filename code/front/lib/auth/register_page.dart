@@ -64,19 +64,29 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            TextField(
-              controller: email,
-              decoration: const InputDecoration(labelText: 'メール'),
+            Semantics(
+              identifier: 'register-email',
+              child: TextField(
+                controller: email,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'メール'),
+              ),
             ),
-            TextField(
-              controller: password,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'パスワード'),
+            Semantics(
+              identifier: 'register-password',
+              child: TextField(
+                controller: password,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'パスワード'),
+              ),
             ),
-            TextField(
-              controller: confirm,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'パスワード確認'),
+            Semantics(
+              identifier: 'register-password-confirm',
+              child: TextField(
+                controller: confirm,
+                obscureText: true,
+                decoration: const InputDecoration(labelText: 'パスワード確認'),
+              ),
             ),
             if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: Colors.red))),
             const SizedBox(height: 16),
