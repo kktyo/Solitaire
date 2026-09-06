@@ -1,0 +1,69 @@
+# やりたいこと
+API と同じ Azure Container Apps（`solitaire-api`）に Flutter Web を載せ、ブラウザの URL でゲームに入れるようにする。
+iOS / Android 用のプロジェクト（`ios/` 等）は残す。App Service・ACR・デプロイスロットは使わない。
+
+修正実行の前に、このファイルの「確認事項」に合意する。未決のままコードを変えない。
+
+# 正本・制約
+- 業務・システム要件の主対象はスマートフォン。Web は追加チャネル（本フェーズ当初の対象外だった）。
+- 本番 API は既存: HTTPS、`/api/v1`、JWT、正本はサーバ。
+- 配備: Container Apps Consumption、最小 0 / 最大 1、イメージは GHCR、SQL は既存 Azure SQL。
+- 契約の詳細: `infra/azure-container-apps-契約.txt`
+- 仕様と矛盾する変更が必要なら、先に `doc` を改訂してからコードを変える。
+
+# 確認事項（実装前に埋める）
+
+## 1. 配信の仕方
+[推奨] 同一 Container Apps。静的ファイル（`flutter build web`）を Spring Boot から配る。
+  公開: `https://<既存FQDN>/` が UI、`/api/v1` が API。同一オリジンのため CORS 追加は不要。
+[ ] 別ホスト（GitHub Pages 等）+ API に CORS。
+
+合意: （ ◯ ）
+
+## 2. クライアントの API ベース URL
+[推奨] Web 本番は相対（オリジン同じなら `API_BASE_URL` 空またはその FQDN）。
+  iOS / macOS ローカル実行は従来どおり `--dart-define=API_BASE_URL=https://<FQDN>`。
+[ ] Web も常に FQDN をビルドに埋め込む。
+
+合意: （ ◯  ）
+
+## 3. SPA のルーティング
+go_router のパス（`/login` 等）を直打ち・リロードしてもゲームが開けること。
+[推奨] `/api/**` 以外は `index.html` にフォールバック。
+
+合意: （ ◯  ）
+
+## 4. CI/CD
+[推奨] 既存 `cd.yml` を拡張。Flutter Web をビルドして Docker イメージに含め、GHCR push → Container Apps 更新 → `/api/v1/health` に加え、`/` または `index.html` のスモーク。
+  CI の `ci-front.yml`（test / APK）は維持。iOS 署名付きストア配布はこの作業に含めない。
+[ ] Web 用に別ワークフロー。
+
+合意: （ ◯  ）
+
+## 5. ドキュメント
+[推奨] システム要件 SN-01 等に「追加で Web ブラウザ可」を短く追記。設計の配置図を Container Apps が UI+API である旨に更新。`prompt.txt` の「Web 専用クライアントは作らない」との関係を「同一 Flutter の Web 出力」と明記。
+[ ] doc は触らずコードだけ。
+
+合意: （ ◯  ）
+
+## 6. 非機能・セキュリティ
+- ゼロスケールの初回表示は数十秒ありうる。変更しない（最小 0 のまま）。
+- Web のトークン保存は `flutter_secure_storage` の Web 実装（localStorage 相当）。スマホより弱いことを doc に一行書く。
+- 追加の Azure 課金リソースを増やさない。
+
+合意: （ ◯  ）
+
+## 7. 対象外
+- ネイティブストア提出、PWA の高度なオフライン、独自ドメイン、CDN、Log Analytics 復活。
+- ゲーム規則・API 契約・DB スキーマの変更（Web 表示に必須な場合のみ例外で doc 先）。
+
+合意: （ ◯  ）
+
+# 完了条件
+- 既存 FQDN のルートをブラウザで開き、登録またはログインのうえ対局できる。
+- `GET /api/v1/health` が従来どおり `UP`。
+- iOS シミュレータ向け `flutter run -d <iPhone>` が壊れない（プロジェクトに `ios/` が残る）。
+- `cd` が main でイメージ更新できる。
+
+# 実装開始の合図
+上記 1〜7 の「合意」が埋まったら実装する。埋まっていない項目は質問して止める。

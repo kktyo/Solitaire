@@ -23,7 +23,9 @@ infra/main.bicep     Azure SQL + Container Apps Consumption
 3. API: `http://127.0.0.1:8080/api/v1/health`
 4. フロント: `cd code/front`
    - 初回のみ: `flutter create --project-name solitaire --org com.solitaire --platforms=android,ios .`
-   - `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080`
+   - ネイティブ: `flutter run --dart-define=API_BASE_URL=http://127.0.0.1:8080`
+   - ブラウザ（ローカル API）: `flutter run -d chrome --dart-define=API_BASE_URL=http://127.0.0.1:8080`
+   - 本番 Web は Container Apps の `/`（`cd.yml` が `flutter build web` を JAR に同梱）
 
 シミュレータから Mac の API を叩く場合は `127.0.0.1` の代わりにホストの LAN IP を使います。
 
@@ -43,7 +45,7 @@ GitHub Actions:
 | --- | --- |
 | `ci-server.yml` | Gradle / JUnit（Testcontainers はランナーに Docker があるとき） |
 | `ci-front.yml` | `flutter test` と debug APK |
-| `cd.yml` | サーバテスト後、イメージを GHCR へ push し Container Apps を更新。ヘルス `/api/v1/health` |
+| `cd.yml` | サーバテスト後、Flutter Web をイメージに含め GHCR へ push し Container Apps を更新。ヘルス `/api/v1/health` と `/` |
 
 必要な GitHub Secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`  
 Variables: `AZURE_RESOURCE_GROUP`, `CONTAINER_APP_NAME`

@@ -1,23 +1,36 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'models.dart';
 
 export 'models.dart';
 
-const apiBaseUrl = String.fromEnvironment('API_BASE_URL', defaultValue: 'http://127.0.0.1:8080');
+/// Empty means same-origin `/api/v1` (Flutter Web on Container Apps).
+String resolveApiBaseUrl() {
+  const fromEnv = String.fromEnvironment('API_BASE_URL', defaultValue: '__unset__');
+  if (fromEnv == '__unset__') {
+    return kIsWeb ? '' : 'http://127.0.0.1:8080';
+  }
+  return fromEnv;
+}
+
+final apiBaseUrl = resolveApiBaseUrl();
 
 class ApiClient {
   ApiClient({Dio? dio, FlutterSecureStorage? storage, void Function()? onAuthLost})
-      : _storage = storage ?? const FlutterSecureStorage(),
+      : _storage = storage ??
+            const FlutterSecureStorage(
+              mOptions: MacOsOptions(useDataProtectionKeyChain: false),
+            ),
         _onAuthLost = onAuthLost {
     _dio = dio ??
         Dio(BaseOptions(
           baseUrl: '$apiBaseUrl/api/v1',
-          connectTimeout: const Duration(seconds: 15),
-          receiveTimeout: const Duration(seconds: 15),
+          connectTimeout: const Duration(seconds: 45),
+          receiveTimeout: const Duration(seconds: 45),
         ));
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {

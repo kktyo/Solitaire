@@ -43,5 +43,6 @@ code/front/.flutter-plugins-dependencies
 **/local.settings.json
 infra/*.parameters.json
 infra/parameters*.json
+infra/azure-container-apps-契約.txt
 
 *.log

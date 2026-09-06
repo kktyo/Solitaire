@@ -35,8 +35,10 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.OPTIONS, "/**")
                         .permitAll()
+                        .requestMatchers("/api/**")
+                        .authenticated()
                         .anyRequest()
-                        .authenticated())
+                        .permitAll())
                 .exceptionHandling(e -> e.authenticationEntryPoint((req, res, ex) -> {
                     res.setStatus(401);
                     res.setContentType("application/json;charset=UTF-8");

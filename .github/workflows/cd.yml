@@ -4,6 +4,7 @@ on:
     branches: [main]
     paths:
       - "code/server/**"
+      - "code/front/**"
       - "code/docker/**"
       - "infra/**"
       - ".github/workflows/cd.yml"
@@ -54,10 +55,23 @@ jobs:
             --name ${{ vars.CONTAINER_APP_NAME }} \
             --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
             --query properties.configuration.ingress.fqdn -o tsv)
+          echo "https://${FQDN}/api/v1/health"
           for i in $(seq 1 36); do
-            if curl -fsS "https://${FQDN}/api/v1/health" | grep -q UP; then
+            if curl -fsS --max-time 20 "https://${FQDN}/api/v1/health" | grep -q UP; then
+              HTML=$(curl -fsS --max-time 20 "https://${FQDN}/" || true)
+              echo "$HTML" | grep -Eqi 'flutter|ソリティア|main.dart.js|flutter_bootstrap' || {
+                echo "root page missing Flutter web bundle"
+                exit 1
+              }
+              curl -fsS --max-time 20 -o /dev/null -w "%{http_code}" "https://${FQDN}/login" | grep -qE '200|304'
               exit 0
             fi
+            echo "attempt ${i} not ready"
             sleep 10
           done
-          echo "health check failed" && exit 1
+          echo "health check failed"
+          az containerapp replica list \
+            --name ${{ vars.CONTAINER_APP_NAME }} \
+            --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
+            -o table || true
+          exit 1

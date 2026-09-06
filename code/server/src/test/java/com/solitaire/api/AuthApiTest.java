@@ -19,10 +19,15 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.forwardedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = {com.solitaire.api.auth.AuthController.class, com.solitaire.api.game.GameController.class})
+@WebMvcTest(controllers = {
+        com.solitaire.api.auth.AuthController.class,
+        com.solitaire.api.game.GameController.class,
+        SpaController.class
+})
 @Import({SecurityConfig.class, ApiExceptionHandler.class})
 class AuthApiTest {
 
@@ -43,6 +48,11 @@ class AuthApiTest {
 
     @MockitoBean
     JwtTokenIssuer jwt;
+
+    @Test
+    void spaLoginForwardsToIndex() throws Exception {
+        mvc.perform(get("/login")).andExpect(status().isOk()).andExpect(forwardedUrl("/index.html"));
+    }
 
     @Test
     void gamesCurrentWithoutTokenIs401() throws Exception {

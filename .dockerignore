@@ -1,0 +1,8 @@
+.git
+**/.dart_tool
+**/build
+code/front/ios
+code/front/android
+code/front/macos
+code/front/.idea
+*.iml

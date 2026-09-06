@@ -1,74 +1,39 @@
 # やりたいこと
-このリポジトリのソース（`code/server` Spring Boot API、`code/front` Flutter）に適合する CI/CD を設計し、**実装可能な提案**として出す。
-アプリ機能の追加や API 契約の変更はしない。提案が設計（単一インスタンス＝セッションストア不要、JWT ステートレス、Flyway、秘密は環境変数）と食い違う場合は、設計に合わせて提案を変える。
+このリポジトリのソース（`code/server` Spring Boot API、`code/front` Flutter）に適合する CI/CD を、**Azure Container Apps + Azure SQL** 契約に合わせて設計する。
+アプリ機能の追加や API 契約の変更はしない。正本は `infra/azure-container-apps-契約.txt` と `doc/03.設計/設計.md` 5.4〜5.6。
 
-正本: `doc/03.設計/設計.md` 5.4〜5.5、`doc/03.設計/サーバ設計.md` 7 章、`code/prompt.txt` の CI/CD・App Service 節。
-
-# 前提（このソースの形）
-- API は Docker イメージで動かす。本番は **Azure App Service（Linux・コンテナ）**
-- DB は SQL Server。スキーマは **Flyway**（アプリ起動時またはデプロイ後の一度）
-- 認証は JWT（ステートレス）。スケールアウトしても Redis 等のセッションは置かない
-- 対局更新の直列は DB 行ロックと `version`。分散ロックは導入しない
-- フロントのストア提出は本フェーズ対象外。CI はテストと（可能なら）APK ビルドまで
+# 前提
+- API は Docker イメージ。本番は **Azure Container Apps Consumption**（最小 0、最大 1）
+- イメージ置き場は **GitHub Container Registry**。ACR は使わない
+- デプロイスロット・App Service Plan は使わない
+- DB は Azure SQL（無料オファーまたは Basic）。Flyway。CI は本番 SQL に繋がない
+- JWT ステートレス。分散ロックなし
 - 秘密（`DB_*`、`JWT_*`）はリポジトリに置かない
 
 # 提案してほしいこと（必須）
 
-## 1. App Service Plan の設定
-次を具体値つきで書く（SKU は理由付きで 1 案に絞る）。
+## 1. Container Apps と SQL
+具体値を 1 案に絞る。
 
-- OS / ランタイム: Linux、コンテナ、Plan と Web App の関係
-- SKU: スロットと自動スケールが使える最低ライン（例: Standard 以上）と、本フェーズ向けの推奨
-- デプロイスロット: `production` / `staging`。スワップ対象設定（接続文字列をスロット固有にするか、共有 Azure SQL にするか）
-- 自動スケール: メトリクス（CPU 等）、最小・最大インスタンス、クールダウン。JWT ステートレス前提で問題ない理由
-- App Settings: `DB_URL` / `DB_USER` / `DB_PASSWORD` / `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET`。スロット固有 vs アプリ共通
-- HTTPS のみ、ヘルスチェックパス（提案するパスと、スロット検証・スケール判定での使い方）
-- コンテナイメージの置き場（ACR 推奨）と App Service からの pull（マネージド ID か admin  cred）
-- 本番 DB は **Azure SQL Database**（API 用）。App Service から接続するファイアウォール / プライベートエンドポイントのどちらを本フェーズで取るか
+- Consumption、min 0 / max 1、CPU 0.5 / メモリ 1Gi、イングレス HTTPS、targetPort 8080
+- ヘルス: `GET /api/v1/health`。UI: `GET /`（Flutter Web を同一コンテナで配信）
+- シークレット: `DB_URL` `DB_USER` `DB_PASSWORD` `JWT_ACCESS_SECRET` `JWT_REFRESH_SECRET`
+- Azure SQL: 無料オファー優先、なければ Basic。ファイアウォールは Azure サービス許可
+- Log Analytics は課金源なので既定の大量収集をしない
+- Bicep の項目一覧と命名（`infra/main.bicep` と一致させる）
 
-ポータル手順だけにせず、再現用に **Bicep または Terraform の構成項目一覧**（リソース名の命名規則含む）を付ける。コード全文はファイル案でよい。
-
-## 2. GitHub Actions の設定内容
-ワークフローをジョブ単位で書く。トリガー、実行 OS、キャッシュ、成果物、必要な Secrets 名を列挙する。
-
-推奨パイプライン（変更してよいが、理由を書くこと）:
-
+## 2. GitHub Actions
 | ワークフロー | トリガー | 内容 |
 | --- | --- | --- |
-| CI | `code/server/**` 等の PR / push | Gradle ビルド、JUnit、結合（下記 3） |
-| CI front | `code/front/**` | `flutter test`（integration_test は実行可否を明記） |
-| CD | main かつ CI 成功 | イメージビルド → ACR → **staging スロット**へデプロイ |
-| スワップ | 手動 `workflow_dispatch` または staging 検証後 | staging → production |
+| CI server | `code/server/**` 等 | Gradle / JUnit / Testcontainers |
+| CI front | `code/front/**` | `flutter test` |
+| CD | main（front/server/docker/infra） | Flutter Web を含むイメージを GHCR へ push → Container Apps 更新 → `/api/v1/health` と `/` |
 
-含めること:
+OIDC（`azure/login`）。必要な Secrets / Variables を列挙。フロント失敗でサーバ CD を止めない。
 
-- Dockerfile / Compose は `code/docker` 前提。ビルドコンテキストとイメージタグ（git SHA）
-- staging デプロイ後のスモーク（ヘルスチェック、必要なら登録 API 1 本）。失敗時はスワップしない
-- フロントはデプロイ対象外。失敗してもサーバ CD を止めないか、monorepo で path filter するか
-- OIDC（`azure/login`）で Azure に入り、パブリッシュプロファイルをリポジトリに置かない案を優先する
-- 必要な GitHub Secrets / Variables の一覧と、何に使うか
-
-ワークフロー YAML の骨格を提案に含める。
-
-## 3. CI 環境で SQL Server に接続する方法
-**本番 Azure SQL に CI から直接繋がない。** CI の結合はエフェメラルな SQL Server とする。
-
-提案に必ず含める:
-
-- 手段の推奨を **1 つに決める**（第一候補: GitHub-hosted `ubuntu-latest` + **Testcontainers** の `mcr.microsoft.com/mssql/server`。代替: ジョブ内 `services:` で同じイメージ）
-- ランナーが Docker を使える前提、ライセンス環境変数（`ACCEPT_EULA`）、SA パスワード方針（ジョブ内生成、ログに出さない）
-- JDBC URL、Flyway がテスト起動で当たること、ポート競合の回避
-- Testcontainers が使えない場合のフォールバック（`docker compose` の SQL Server サービス）
-- CI 用と App Service 用の接続先を設定で分離すること（CI が Azure SQL のファイアウォール例外に依存しない）
-- 注意: Microsoft 公式 SQL Server コンテナは amd64。ARM ランナーを使うなら制約を書く
-
-# 提案の出し方
-1. 推奨アーキテクチャを数行で（CI の SQL / 本番の Azure SQL / ACR / App Service スロット）
-2. 上記 1〜3 を項立て
-3. 導入順（先に CI 緑、次に staging、最後にスロットとオートスケール）
-4. やらないこと（本番 DB への CI 書き込み、秘密のコミット、セッションストア）
+## 3. CI の SQL
+本番 Azure SQL に CI から繋がない。GitHub-hosted + Testcontainers の SQL Server。CI 用と Container Apps 用の接続先を分離する。
 
 # 完了条件
-- 上記 3 点が、このリポジトリのディレクトリと環境変数名に紐づいて書かれている
-- コピペでワークフローと IaC の骨格が置ける
-- CI の SQL と本番の SQL の切り分けが誤解なく書いてある
+- 契約ファイル（SQL + Container Apps、ACR/スロットなし）と食い違わない
+- CI の SQL と本番 SQL が混ざらない
