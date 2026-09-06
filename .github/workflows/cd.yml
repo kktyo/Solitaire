@@ -6,8 +6,10 @@ on:
       - "code/server/**"
       - "code/front/**"
       - "code/docker/**"
+      - "code/e2e/**"
       - "infra/**"
       - ".github/workflows/cd.yml"
+      - ".github/workflows/e2e.yml"
   workflow_dispatch:
 
 permissions:
@@ -44,8 +46,13 @@ jobs:
           flutter pub get
           flutter test
 
-  deploy:
+  test-e2e:
     needs: [test-server, test-front]
+    uses: ./.github/workflows/e2e.yml
+    secrets: inherit
+
+  deploy:
+    needs: [test-server, test-front, test-e2e]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

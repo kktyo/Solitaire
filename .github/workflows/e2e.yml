@@ -1,0 +1,59 @@
+name: e2e
+on:
+  workflow_call:
+  pull_request:
+    paths:
+      - "code/server/**"
+      - "code/front/**"
+      - "code/docker/**"
+      - "code/e2e/**"
+      - ".github/workflows/e2e.yml"
+
+jobs:
+  playwright:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: code/e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: code/e2e/package-lock.json
+      - name: Install Playwright
+        run: |
+          npm ci
+          npx playwright install chromium --with-deps
+      - name: Start API and Flutter Web (Compose)
+        working-directory: ${{ github.workspace }}
+        run: docker compose -f code/docker/compose.yml --env-file code/docker/.env.example up --build -d
+      - name: Wait for health
+        working-directory: ${{ github.workspace }}
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fsS --max-time 10 http://127.0.0.1:8080/api/v1/health | grep -q UP; then
+              exit 0
+            fi
+            echo "attempt ${i} not ready"
+            sleep 10
+          done
+          docker compose -f code/docker/compose.yml --env-file code/docker/.env.example logs
+          exit 1
+      - name: Playwright
+        env:
+          CI: true
+          E2E_BASE_URL: http://127.0.0.1:8080
+        run: npx playwright test
+      - name: Compose down
+        if: always()
+        working-directory: ${{ github.workspace }}
+        run: docker compose -f code/docker/compose.yml --env-file code/docker/.env.example down -v
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: code/e2e/playwright-report
+          retention-days: 7

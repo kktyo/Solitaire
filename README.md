@@ -9,6 +9,7 @@ doc/                 仕様・設計
 code/front/          Flutter
 code/server/         Spring Boot 3 / Java 21
 code/docker/         Compose と API Dockerfile
+code/e2e/            Playwright（API + Flutter Web）
 infra/main.bicep     Azure SQL + Container Apps Consumption
 ```
 
@@ -35,6 +36,11 @@ infra/main.bicep     Azure SQL + Container Apps Consumption
   JUnit（規則ベクタ・ユースケース・認証 API）。Docker がある環境では Testcontainers の SQL Server で結合（`GameApiIT`）が走ります。本番 Azure SQL には接続しません。
 - フロント: `cd code/front && flutter test`  
   規則ベクタと、送信中に第二手が HTTP されないことの単体テスト。
+- Playwright: Compose で API（Flutter Web 同梱）を起動したうえで `code/e2e` を実行する。本番 Azure には繋がない。
+  ```
+  cd code/docker && docker compose --env-file .env up --build
+  cd ../e2e && npm ci && npx playwright install chromium && npm test
+  ```
 - `integration_test/` はログイン画面の到達確認です。対局〜保存〜再開の手動受入はローカル API に対して行います（システム要件 9 章）。
 
 ## CI/CD
@@ -45,7 +51,8 @@ GitHub Actions:
 | --- | --- |
 | `ci-server.yml` | Gradle / JUnit（Testcontainers はランナーに Docker があるとき） |
 | `ci-front.yml` | `flutter test` と debug APK |
-| `cd.yml` | フロント・サーバのテストが両方通ってから、Flutter Web を含むイメージを GHCR へ push し Container Apps を更新。ヘルス `/api/v1/health` と `/` |
+| `e2e.yml` | Compose 上で Playwright（API + Web）。PR と CD から実行 |
+| `cd.yml` | フロント・サーバのテストと Playwright が通ってから、イメージを GHCR へ push し Container Apps を更新。ヘルス `/api/v1/health` と `/` |
 
 必要な GitHub Secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`  
 Variables: `AZURE_RESOURCE_GROUP`, `CONTAINER_APP_NAME`

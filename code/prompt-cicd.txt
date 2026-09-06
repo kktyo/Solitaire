@@ -27,9 +27,10 @@
 | --- | --- | --- |
 | CI server | `code/server/**` 等 | Gradle / JUnit / Testcontainers |
 | CI front | `code/front/**` | `flutter test` |
-| CD | main（front/server/docker/infra） | `flutter test` と Gradle test が両方成功してからイメージを GHCR へ push → Container Apps 更新 → `/api/v1/health` と `/` |
+| E2E | PR（front/server/docker/e2e） | Compose + Playwright（API と Flutter Web）。本番 SQL には繋がない |
+| CD | main（front/server/docker/e2e/infra） | `flutter test`・Gradle test・Playwright が成功してからイメージを GHCR へ push → Container Apps 更新 → `/api/v1/health` と `/` |
 
-OIDC（`azure/login`）。必要な Secrets / Variables を列挙。フロントまたはサーバのテスト失敗で CD のデプロイを止める。
+OIDC（`azure/login`）。必要な Secrets / Variables を列挙。フロント・サーバ・Playwright のいずれかの失敗で CD のデプロイを止める。
 
 ## 3. CI の SQL
 本番 Azure SQL に CI から繋がない。GitHub-hosted + Testcontainers の SQL Server。CI 用と Container Apps 用の接続先を分離する。

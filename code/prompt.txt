@@ -52,8 +52,7 @@ Web 専用の別クライアントは作らない。ブラウザ向けは同一 
 - ベクタの正は `doc/03.設計/fixtures/`。front / server からコピーまたは相対参照する
 
 ## 結合テスト
-クライアントは Flutter モバイルであり Web 画面はない。結合は次とする（Playwright は使わない）。
-
+- Playwright（`code/e2e`）: Compose で起動した API + Flutter Web に対する API と画面の E2E。本番 Azure には繋がない
 - サーバ: Testcontainers の SQL Server（使えなければ Compose の SQL Server プロファイル）に対する API 結合テスト
   - 登録〜ログイン〜新規対局〜合法手〜不正手 422（DB 不変）〜アンドゥ〜クリアで `game_results` 1 行
   - 未認証 401、版ずれ 409、やり直し後の `GET /games/current` が新対局のみ
@@ -63,6 +62,7 @@ Web 専用の別クライアントは作らない。ブラウザ向けは同一 
 ## CI/CD（GitHub Actions）
 - `code/server`: ビルド、JUnit、（可能な範囲で）Testcontainers 結合
 - `code/front`: `flutter test`（および CI で実行可能な integration_test）
+- `code/e2e`: Playwright（Compose の API + Web）
 - 成功時: サーバ Docker イメージを GitHub Container Registry へ push し、Azure Container Apps のイメージを更新する
 - スロット・ACR・App Service Plan は使わない
 - 秘密は GitHub Secrets / Container Apps シークレット。成果物にトークン・接続文字列を埋め込まない

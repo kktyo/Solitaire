@@ -8,6 +8,9 @@
 **/.vscode/
 .DS_Store
 
+# Node (Playwright)
+**/node_modules/
+
 # Flutter
 **/.dart_tool/
 code/front/.flutter-plugins
