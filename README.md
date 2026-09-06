@@ -45,7 +45,7 @@ GitHub Actions:
 | --- | --- |
 | `ci-server.yml` | Gradle / JUnit（Testcontainers はランナーに Docker があるとき） |
 | `ci-front.yml` | `flutter test` と debug APK |
-| `cd.yml` | サーバテスト後、Flutter Web をイメージに含め GHCR へ push し Container Apps を更新。ヘルス `/api/v1/health` と `/` |
+| `cd.yml` | フロント・サーバのテストが両方通ってから、Flutter Web を含むイメージを GHCR へ push し Container Apps を更新。ヘルス `/api/v1/health` と `/` |
 
 必要な GitHub Secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`  
 Variables: `AZURE_RESOURCE_GROUP`, `CONTAINER_APP_NAME`
