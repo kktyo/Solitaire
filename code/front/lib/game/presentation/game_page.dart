@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import '../../api/client.dart';
 import '../application/session.dart';
 import '../domain/rules.dart';
+import 'playing_card.dart';
 
 class GamePage extends ConsumerStatefulWidget {
   const GamePage({super.key});
@@ -152,9 +153,6 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
     });
 
     final board = session.displayBoard;
-    final w = MediaQuery.sizeOf(context).width;
-    final cardW = (w / 7) - 4;
-    final cardH = cardW * 1.4;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D4F1C),
@@ -180,35 +178,73 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
               content: Text(session.toast!),
               actions: [TextButton(onPressed: () {}, child: const Text(''))],
             ),
-          Padding(
-            padding: const EdgeInsets.all(8),
-            child: Row(
-              children: [
-                for (var i = 0; i < 4; i++)
-                  _pileTarget(
-                    cardW,
-                    cardH,
-                    Location(Pile.foundation, i),
-                    board.foundations[Suit.values[i]]!,
-                    session,
-                  ),
-                const Spacer(),
-                GestureDetector(
-                  onTap: () => ref.read(gameSessionProvider.notifier).tapStock(),
-                  child: _cardFace(cardW, cardH, board.stock.isEmpty ? null : Card('back', false), back: true, empty: board.stock.isEmpty),
-                ),
-                const SizedBox(width: 8),
-                _pileTarget(cardW, cardH, Location(Pile.waste, 0), board.waste, session, waste: true),
-              ],
-            ),
-          ),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var col = 0; col < 7; col++)
-                  Expanded(child: _tableauColumn(col, board.tableau[col], cardW, cardH, session)),
-              ],
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final maxN = board.tableau.fold<int>(1, (m, col) => col.length > m ? col.length : m);
+                final layout = BoardLayout.of(
+                  viewport: Size(constraints.maxWidth, constraints.maxHeight),
+                  maxTableauCount: maxN,
+                );
+                return Center(
+                  child: SizedBox(
+                    width: layout.boardWidth,
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Row(
+                            children: [
+                              for (var i = 0; i < 4; i++)
+                                _pileTarget(
+                                  layout,
+                                  Location(Pile.foundation, i),
+                                  board.foundations[Suit.values[i]]!,
+                                  session,
+                                ),
+                              const Spacer(),
+                              GestureDetector(
+                                onTap: () => ref.read(gameSessionProvider.notifier).tapStock(),
+                                child: PlayingCardView(
+                                  width: layout.cardWidth,
+                                  height: layout.cardHeight,
+                                  empty: board.stock.isEmpty,
+                                  facedown: board.stock.isNotEmpty,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _pileTarget(layout, Location(Pile.waste, 0), board.waste, session),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: LayoutBuilder(
+                            builder: (context, table) {
+                              final tableLayout = BoardLayout(
+                                boardWidth: layout.boardWidth,
+                                cardWidth: layout.cardWidth,
+                                cardHeight: layout.cardHeight,
+                                minPeek: layout.minPeek,
+                                preferredPeek: layout.preferredPeek,
+                                tableauHeight: table.maxHeight,
+                              );
+                              return Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  for (var col = 0; col < 7; col++)
+                                    Expanded(
+                                      child: _tableauColumn(col, board.tableau[col], tableLayout, session),
+                                    ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -216,8 +252,9 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
     );
   }
 
-  Widget _tableauColumn(int col, List<Card> cards, double w, double h, GameSession session) {
+  Widget _tableauColumn(int col, List<Card> cards, BoardLayout layout, GameSession session) {
     final sel = session.selected;
+    final peek = layout.peekFor(cards.length);
     return DragTarget<Move>(
       onWillAcceptWithDetails: (d) => true,
       onAcceptWithDetails: (d) {
@@ -227,61 +264,74 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
         if (cards.isEmpty) {
           return GestureDetector(
             onTap: () => ref.read(gameSessionProvider.notifier).selectOrMove(Location(Pile.tableau, col), 1),
-            child: Container(
-              margin: const EdgeInsets.all(2),
-              height: h,
-              decoration: BoxDecoration(border: Border.all(color: Colors.white24), borderRadius: BorderRadius.circular(6)),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: PlayingCardView(width: layout.cardWidth, height: layout.cardHeight, empty: true),
             ),
           );
         }
-        return Stack(
-          children: [
-            for (var i = 0; i < cards.length; i++)
-              Positioned(
-                top: i * 22,
-                left: 2,
-                right: 2,
-                child: _draggableCard(col, i, cards, w, h, session, sel),
-              ),
-          ],
+        return SizedBox(
+          height: layout.cardHeight + peek * (cards.length - 1),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              for (var i = 0; i < cards.length; i++)
+                Positioned(
+                  top: i * peek,
+                  left: 2,
+                  right: 2,
+                  child: _draggableCard(col, i, cards, layout, session, sel),
+                ),
+            ],
+          ),
         );
       },
     );
   }
 
-  Widget _draggableCard(int col, int i, List<Card> cards, double w, double h, GameSession session, Selection? sel) {
+  Widget _draggableCard(int col, int i, List<Card> cards, BoardLayout layout, GameSession session, Selection? sel) {
     final live = session.displayBoard;
     final movable = Rules.movableTableauCount(live, col, i);
     final card = cards[i];
     final highlighted = sel != null && sel.from.pile == Pile.tableau && sel.from.index == col && i >= live.tableau[col].length - sel.count;
+    final face = PlayingCardView(
+      width: layout.cardWidth,
+      height: layout.cardHeight,
+      card: card,
+      highlight: highlighted,
+    );
     final child = GestureDetector(
       onTap: () {
         if (movable > 0) {
           ref.read(gameSessionProvider.notifier).selectOrMove(Location(Pile.tableau, col), movable);
         }
       },
-      child: _cardFace(w, h, card, highlight: highlighted),
+      child: face,
     );
-    if (!card.faceUp || movable == 0 || session.sending) return child;
+    if (!card.faceUp || movable == 0 || session.sending) {
+      return child;
+    }
     return Draggable<Move>(
       data: Move.relocate(Location(Pile.tableau, col), Location(Pile.tableau, col), movable),
-      feedback: _cardFace(w, h, card, highlight: true),
+      feedback: Material(
+        color: Colors.transparent,
+        child: PlayingCardView(width: layout.cardWidth, height: layout.cardHeight, card: card, highlight: true),
+      ),
       childWhenDragging: Opacity(opacity: 0.3, child: child),
       child: child,
     );
   }
 
-  Widget _pileTarget(double w, double h, Location loc, List<Card> cards, GameSession session, {bool waste = false}) {
+  Widget _pileTarget(BoardLayout layout, Location loc, List<Card> cards, GameSession session) {
     final top = cards.isEmpty ? null : cards.last;
     final child = GestureDetector(
-      onTap: () {
-        if (waste && top != null) {
-          ref.read(gameSessionProvider.notifier).selectOrMove(loc, 1);
-        } else {
-          ref.read(gameSessionProvider.notifier).selectOrMove(loc, 1);
-        }
-      },
-      child: _cardFace(w, h, top, empty: top == null),
+      onTap: () => ref.read(gameSessionProvider.notifier).selectOrMove(loc, 1),
+      child: PlayingCardView(
+        width: layout.cardWidth,
+        height: layout.cardHeight,
+        card: top,
+        empty: top == null,
+      ),
     );
     return DragTarget<Move>(
       onAcceptWithDetails: (d) {
@@ -290,36 +340,4 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
       builder: (c, a, r) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: child),
     );
   }
-
-  Widget _cardFace(double w, double h, Card? card, {bool back = false, bool empty = false, bool highlight = false}) {
-    final color = empty
-        ? Colors.white10
-        : (card == null || back || !(card.faceUp))
-            ? const Color(0xFF1A237E)
-            : Colors.white;
-    final textColor = card == null || !card.faceUp
-        ? Colors.white
-        : (card.red ? Colors.red : Colors.black);
-    final label = card == null || !card.faceUp || back
-        ? ''
-        : '${_rank(card)}${_suit(card)}';
-    return Container(
-      width: w,
-      height: h,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: highlight ? Colors.amber : Colors.black26, width: highlight ? 3 : 1),
-      ),
-      child: Text(label, style: TextStyle(color: textColor, fontWeight: FontWeight.bold, fontSize: 12)),
-    );
-  }
-
-  String _rank(Card c) {
-    const order = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-    return order[c.rank - 1];
-  }
-
-  String _suit(Card c) => switch (c.suit) { Suit.s => '♠', Suit.h => '♥', Suit.d => '♦', Suit.c => '♣' };
 }
