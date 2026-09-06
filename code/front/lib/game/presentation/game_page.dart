@@ -4,7 +4,6 @@ import 'package:flutter/material.dart' hide Card;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../api/client.dart';
 import '../application/session.dart';
 import '../domain/rules.dart';
 import 'playing_card.dart';
@@ -16,8 +15,11 @@ class GamePage extends ConsumerStatefulWidget {
   ConsumerState<GamePage> createState() => _GamePageState();
 }
 
-class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver {
+class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver, TickerProviderStateMixin {
   Timer? _tick;
+  int? _stalemateShownVersion;
+  int? _dragCol;
+  int? _dragIndex;
 
   @override
   void initState() {
@@ -123,6 +125,36 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
             ],
           ),
         );
+      } else if (session.server.status == 'IN_PROGRESS' &&
+          session.server.stalemate &&
+          session.server.version != _stalemateShownVersion &&
+          mounted) {
+        _stalemateShownVersion = session.server.version;
+        showDialog<void>(
+          context: context,
+          builder: (c) => AlertDialog(
+            title: const Text('詰みです'),
+            content: const Text('置ける手がありません。アンドゥするかやり直してください。'),
+            actions: [
+              TextButton(
+                onPressed: session.server.canUndo
+                    ? () {
+                        Navigator.pop(c);
+                        ref.read(gameSessionProvider.notifier).undo();
+                      }
+                    : null,
+                child: const Text('アンドゥ'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(c);
+                  _restart();
+                },
+                child: const Text('やり直し'),
+              ),
+            ],
+          ),
+        );
       }
       if (session.error != null) {
         showDialog<void>(
@@ -196,11 +228,12 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
                           child: Row(
                             children: [
                               for (var i = 0; i < 4; i++)
-                                _pileTarget(
+                                _pileSlot(
                                   layout,
                                   Location(Pile.foundation, i),
                                   board.foundations[Suit.values[i]]!,
                                   session,
+                                  draggable: true,
                                 ),
                               const Spacer(),
                               GestureDetector(
@@ -213,7 +246,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              _pileTarget(layout, Location(Pile.waste, 0), board.waste, session),
+                              _pileSlot(layout, Location(Pile.waste, 0), board.waste, session, draggable: true),
                             ],
                           ),
                         ),
@@ -252,22 +285,47 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
     );
   }
 
+  bool _willAccept(Move incoming, Location to, GameSession session) {
+    if (session.sending) return false;
+    return Rules.isLegal(session.displayBoard, Move.relocate(incoming.from!, to, incoming.count));
+  }
+
+  void _drop(Move incoming, Location to) {
+    ref.read(gameSessionProvider.notifier).play(Move.relocate(incoming.from!, to, incoming.count));
+  }
+
+  void _flyBack(Offset from, Offset to, Widget feedback) {
+    final overlay = Overlay.of(context, rootOverlay: true);
+    final controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 250));
+    final anim = Tween<Offset>(begin: from, end: to).animate(CurvedAnimation(parent: controller, curve: Curves.easeOut));
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => AnimatedBuilder(
+        animation: anim,
+        builder: (_, __) => Positioned(
+          left: anim.value.dx,
+          top: anim.value.dy,
+          child: IgnorePointer(child: feedback),
+        ),
+      ),
+    );
+    overlay.insert(entry);
+    controller.forward().whenComplete(() {
+      entry.remove();
+      controller.dispose();
+    });
+  }
+
   Widget _tableauColumn(int col, List<Card> cards, BoardLayout layout, GameSession session) {
-    final sel = session.selected;
     final peek = layout.peekFor(cards.length);
     return DragTarget<Move>(
-      onWillAcceptWithDetails: (d) => true,
-      onAcceptWithDetails: (d) {
-        ref.read(gameSessionProvider.notifier).play(Move.relocate(d.data.from!, Location(Pile.tableau, col), d.data.count));
-      },
+      onWillAcceptWithDetails: (d) => _willAccept(d.data, Location(Pile.tableau, col), session),
+      onAcceptWithDetails: (d) => _drop(d.data, Location(Pile.tableau, col)),
       builder: (c, cand, rej) {
         if (cards.isEmpty) {
-          return GestureDetector(
-            onTap: () => ref.read(gameSessionProvider.notifier).selectOrMove(Location(Pile.tableau, col), 1),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: PlayingCardView(width: layout.cardWidth, height: layout.cardHeight, empty: true),
-            ),
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: PlayingCardView(width: layout.cardWidth, height: layout.cardHeight, empty: true),
           );
         }
         return SizedBox(
@@ -280,7 +338,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
                   top: i * peek,
                   left: 2,
                   right: 2,
-                  child: _draggableCard(col, i, cards, layout, session, sel),
+                  child: _tableauCard(col, i, cards, layout, session),
                 ),
             ],
           ),
@@ -289,55 +347,122 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
     );
   }
 
-  Widget _draggableCard(int col, int i, List<Card> cards, BoardLayout layout, GameSession session, Selection? sel) {
+  Widget _tableauCard(int col, int i, List<Card> cards, BoardLayout layout, GameSession session) {
     final live = session.displayBoard;
     final movable = Rules.movableTableauCount(live, col, i);
     final card = cards[i];
-    final highlighted = sel != null && sel.from.pile == Pile.tableau && sel.from.index == col && i >= live.tableau[col].length - sel.count;
+    final hiding = _dragCol == col && _dragIndex != null && i >= _dragIndex!;
     final face = PlayingCardView(
       width: layout.cardWidth,
       height: layout.cardHeight,
       card: card,
-      highlight: highlighted,
-    );
-    final child = GestureDetector(
-      onTap: () {
-        if (movable > 0) {
-          ref.read(gameSessionProvider.notifier).selectOrMove(Location(Pile.tableau, col), movable);
-        }
-      },
-      child: face,
     );
     if (!card.faceUp || movable == 0 || session.sending) {
-      return child;
+      return face;
     }
-    return Draggable<Move>(
-      data: Move.relocate(Location(Pile.tableau, col), Location(Pile.tableau, col), movable),
-      feedback: Material(
-        color: Colors.transparent,
-        child: PlayingCardView(width: layout.cardWidth, height: layout.cardHeight, card: card, highlight: true),
-      ),
-      childWhenDragging: Opacity(opacity: 0.3, child: child),
-      child: child,
+    final origin = Location(Pile.tableau, col);
+    final data = Move.relocate(origin, origin, movable);
+    final feedback = _stackFeedback(cards.sublist(i), layout);
+    return _returnDraggable(
+      data: data,
+      feedback: feedback,
+      childWhenDragging: Opacity(opacity: hiding ? 0 : 0.3, child: face),
+      child: face,
+      onStart: () => setState(() {
+        _dragCol = col;
+        _dragIndex = i;
+      }),
+      onEnd: () => setState(() {
+        _dragCol = null;
+        _dragIndex = null;
+      }),
     );
   }
 
-  Widget _pileTarget(BoardLayout layout, Location loc, List<Card> cards, GameSession session) {
-    final top = cards.isEmpty ? null : cards.last;
-    final child = GestureDetector(
-      onTap: () => ref.read(gameSessionProvider.notifier).selectOrMove(loc, 1),
-      child: PlayingCardView(
+  Widget _stackFeedback(List<Card> cards, BoardLayout layout) {
+    final peek = layout.minPeek;
+    return Material(
+      color: Colors.transparent,
+      child: SizedBox(
         width: layout.cardWidth,
-        height: layout.cardHeight,
-        card: top,
-        empty: top == null,
+        height: layout.cardHeight + peek * (cards.length - 1),
+        child: Stack(
+          children: [
+            for (var k = 0; k < cards.length; k++)
+              Positioned(
+                top: k * peek,
+                child: PlayingCardView(
+                  width: layout.cardWidth,
+                  height: layout.cardHeight,
+                  card: cards[k],
+                  highlight: true,
+                ),
+              ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _pileSlot(BoardLayout layout, Location loc, List<Card> cards, GameSession session, {required bool draggable}) {
+    final top = cards.isEmpty ? null : cards.last;
+    Widget face = PlayingCardView(
+      width: layout.cardWidth,
+      height: layout.cardHeight,
+      card: top,
+      empty: top == null,
+    );
+    if (draggable && top != null && !session.sending) {
+      final data = Move.relocate(loc, loc, 1);
+      final feedback = Material(
+        color: Colors.transparent,
+        child: PlayingCardView(width: layout.cardWidth, height: layout.cardHeight, card: top, highlight: true),
+      );
+      face = _returnDraggable(
+        data: data,
+        feedback: feedback,
+        childWhenDragging: Opacity(opacity: 0.3, child: face),
+        child: face,
+      );
+    }
     return DragTarget<Move>(
-      onAcceptWithDetails: (d) {
-        ref.read(gameSessionProvider.notifier).play(Move.relocate(d.data.from!, loc, d.data.count));
+      onWillAcceptWithDetails: (d) => _willAccept(d.data, loc, session),
+      onAcceptWithDetails: (d) => _drop(d.data, loc),
+      builder: (c, a, r) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: face),
+    );
+  }
+
+  Widget _returnDraggable({
+    required Move data,
+    required Widget feedback,
+    required Widget childWhenDragging,
+    required Widget child,
+    VoidCallback? onStart,
+    VoidCallback? onEnd,
+  }) {
+    Offset origin = Offset.zero;
+    return Builder(
+      builder: (ctx) {
+        return Draggable<Move>(
+          data: data,
+          feedback: feedback,
+          childWhenDragging: childWhenDragging,
+          onDragStarted: () {
+            final box = ctx.findRenderObject() as RenderBox?;
+            if (box != null && box.hasSize) {
+              origin = box.localToGlobal(Offset.zero);
+            }
+            onStart?.call();
+          },
+          onDragEnd: (details) {
+            onEnd?.call();
+            if (!details.wasAccepted && mounted) {
+              _flyBack(details.offset, origin, feedback);
+            }
+          },
+          child: child,
+        );
       },
-      builder: (c, a, r) => Padding(padding: const EdgeInsets.symmetric(horizontal: 2), child: child),
     );
   }
 }

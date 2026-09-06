@@ -290,7 +290,89 @@ class Rules {
       lower.red != upper.red && upper.rank == lower.rank - 1 && upper.faceUp && lower.faceUp;
 
   static ApplyResult _ok(Board b) {
-    final cleared = b.foundations.values.every((c) => c.length == 13);
-    return ApplyResult.ok(b, cleared);
+    return ApplyResult.ok(b, isCleared(b));
+  }
+
+  static bool isCleared(Board board) => board.foundations.values.every((c) => c.length == 13);
+
+  static List<Move> legalRelocates(Board board) {
+    final out = <Move>[];
+    void addFrom(Location from, int count) {
+      for (var to = 0; to < 7; to++) {
+        if (from.pile == Pile.tableau && from.index == to) continue;
+        final m = Move.relocate(from, Location(Pile.tableau, to), count);
+        if (isLegal(board, m)) out.add(m);
+      }
+      if (count == 1) {
+        for (var f = 0; f < 4; f++) {
+          if (from.pile == Pile.foundation && from.index == f) continue;
+          final m = Move.relocate(from, Location(Pile.foundation, f), 1);
+          if (isLegal(board, m)) out.add(m);
+        }
+      }
+    }
+
+    for (var col = 0; col < 7; col++) {
+      final cards = board.tableau[col];
+      for (var i = 0; i < cards.length; i++) {
+        final count = movableTableauCount(board, col, i);
+        if (count > 0) addFrom(Location(Pile.tableau, col), count);
+      }
+    }
+    if (board.waste.isNotEmpty) {
+      addFrom(Location(Pile.waste, 0), 1);
+    }
+    for (var f = 0; f < 4; f++) {
+      if (board.foundations[Suit.values[f]]!.isNotEmpty) {
+        addFrom(Location(Pile.foundation, f), 1);
+      }
+    }
+    return out;
+  }
+
+  static bool isStalemate(Board board) {
+    if (isCleared(board)) return false;
+    if (legalRelocates(board).isNotEmpty) return false;
+    if (board.stock.isEmpty && board.waste.isEmpty) return true;
+    var cur = board.copy();
+    final seen = <String>{};
+    while (true) {
+      if (!seen.add(_stockWasteKey(cur))) return true;
+      if (_wasteTopPlayable(cur)) return false;
+      final ApplyResult next;
+      if (cur.stock.isNotEmpty) {
+        next = apply(cur, Move.draw());
+      } else if (cur.waste.isNotEmpty) {
+        next = apply(cur, Move.recycle());
+      } else {
+        return true;
+      }
+      if (!next.legal) return true;
+      cur = next.board!;
+    }
+  }
+
+  static bool _wasteTopPlayable(Board board) {
+    if (board.waste.isEmpty) return false;
+    final from = Location(Pile.waste, 0);
+    for (var to = 0; to < 7; to++) {
+      if (isLegal(board, Move.relocate(from, Location(Pile.tableau, to), 1))) return true;
+    }
+    for (var f = 0; f < 4; f++) {
+      if (isLegal(board, Move.relocate(from, Location(Pile.foundation, f), 1))) return true;
+    }
+    return false;
+  }
+
+  static String _stockWasteKey(Board board) {
+    final ids = StringBuffer();
+    for (final c in board.stock) {
+      ids.write(c.id);
+    }
+    ids.write('/');
+    for (final c in board.waste) {
+      ids.write(c.id);
+    }
+    return ids.toString();
   }
 }

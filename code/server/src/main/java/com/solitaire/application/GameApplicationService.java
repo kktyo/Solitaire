@@ -89,7 +89,7 @@ public class GameApplicationService {
             old.setUpdatedAt(now);
             games.update(old);
         }
-        Board board = Deal.initialBoard(random);
+        Board board = Deal.winnableBoard(random);
         BoardInvariant.assertFullDeck(board);
         GameRecord game = new GameRecord();
         game.setId(UUID.randomUUID());

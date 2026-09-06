@@ -73,6 +73,7 @@
   "elapsedMs": 45000,
   "timingStartedAt": "2026-09-05T15:31:00.000Z",
   "canUndo": true,
+  "stalemate": false,
   "board": {},
   "startedAt": "2026-09-05T15:30:00.000Z",
   "updatedAt": "2026-09-05T15:31:00.000Z",
@@ -81,6 +82,7 @@
 ```
 
 `status`: `IN_PROGRESS` | `CLEARED` | `ABANDONED`。  
+`stalemate`: 操作詰みなら `true`（`IN_PROGRESS` のみ。クリア済みは常に `false`）。定義はシステム要件 5.5a。  
 `timingStartedAt` は計測停止中 `null`。クリア済みは `null`、`clearedAt` あり。
 
 **ResultSummary**

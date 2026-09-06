@@ -24,6 +24,7 @@ class GameDto {
     required this.elapsedMs,
     required this.timingStartedAt,
     required this.canUndo,
+    required this.stalemate,
     required this.board,
     required this.startedAt,
     required this.updatedAt,
@@ -37,6 +38,7 @@ class GameDto {
   final int elapsedMs;
   final DateTime? timingStartedAt;
   final bool canUndo;
+  final bool stalemate;
   final Map<String, dynamic> board;
   final DateTime startedAt;
   final DateTime updatedAt;
@@ -52,6 +54,7 @@ class GameDto {
       elapsedMs: json['elapsedMs'] as int,
       timingStartedAt: parse(json['timingStartedAt']),
       canUndo: json['canUndo'] as bool? ?? false,
+      stalemate: json['stalemate'] as bool? ?? false,
       board: Map<String, dynamic>.from(json['board'] as Map),
       startedAt: DateTime.parse(json['startedAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),

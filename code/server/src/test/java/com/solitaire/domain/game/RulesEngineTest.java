@@ -83,6 +83,41 @@ class RulesEngineTest {
         assertEquals(13, ok.board().foundations().get(Suit.S).size());
     }
 
+    @Test
+    void tvStalemateWasteUnplayable() {
+        List<List<Card>> tableau = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            tableau.add(new ArrayList<>());
+        }
+        Map<Suit, List<Card>> f = new EnumMap<>(Suit.class);
+        for (Suit s : Suit.values()) {
+            f.put(s, new ArrayList<>());
+        }
+        Board stuck = new Board(tableau, f, List.of(), List.of(new Card("5H", true)));
+        assertTrue(Rules.isStalemate(stuck));
+        Board ace = new Board(tableau, f, List.of(), List.of(new Card("AH", true)));
+        assertFalse(Rules.isStalemate(ace));
+    }
+
+    @Test
+    void clearedIsNotStalemate() {
+        List<List<Card>> tableau = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            tableau.add(new ArrayList<>());
+        }
+        Map<Suit, List<Card>> f = new EnumMap<>(Suit.class);
+        for (Suit s : Suit.values()) {
+            List<Card> col = new ArrayList<>();
+            for (int r = 1; r <= 13; r++) {
+                col.add(new Card(Rank.label(r) + s.name(), true));
+            }
+            f.put(s, col);
+        }
+        Board board = new Board(tableau, f, List.of(), List.of());
+        assertTrue(Rules.isCleared(board));
+        assertFalse(Rules.isStalemate(board));
+    }
+
     private static void assertExpect(String id, Board board, JsonNode expect) {
         if (expect.has("tableau0Empty")) {
             assertEquals(expect.get("tableau0Empty").asBoolean(), board.tableau().get(0).isEmpty(), id);

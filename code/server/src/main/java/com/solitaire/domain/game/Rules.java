@@ -212,4 +212,142 @@ public final class Rules {
         }
         return Suit.ofIndex(index);
     }
+
+    public static boolean isCleared(Board board) {
+        for (Suit s : Suit.values()) {
+            if (board.foundation(s).size() != 13) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static List<Move> legalRelocates(Board board) {
+        List<Move> out = new ArrayList<>();
+        for (int col = 0; col < 7; col++) {
+            List<Card> cards = board.tableauCol(col);
+            for (int i = 0; i < cards.size(); i++) {
+                int count = movableTableauCount(board, col, i);
+                if (count == 0) {
+                    continue;
+                }
+                Location from = new Location(Pile.TABLEAU, col);
+                addRelocates(board, from, count, out);
+            }
+        }
+        if (!board.wasteMut().isEmpty()) {
+            addRelocates(board, new Location(Pile.WASTE, 0), 1, out);
+        }
+        for (int f = 0; f < 4; f++) {
+            if (!board.foundation(Suit.ofIndex(f)).isEmpty()) {
+                addRelocates(board, new Location(Pile.FOUNDATION, f), 1, out);
+            }
+        }
+        return out;
+    }
+
+    private static void addRelocates(Board board, Location from, int count, List<Move> out) {
+        for (int to = 0; to < 7; to++) {
+            if (from.pile() == Pile.TABLEAU && from.index() == to) {
+                continue;
+            }
+            Move m = Move.relocate(from, new Location(Pile.TABLEAU, to), count);
+            if (isLegal(board, m)) {
+                out.add(m);
+            }
+        }
+        if (count == 1) {
+            for (int f = 0; f < 4; f++) {
+                if (from.pile() == Pile.FOUNDATION && from.index() == f) {
+                    continue;
+                }
+                Move m = Move.relocate(from, new Location(Pile.FOUNDATION, f), 1);
+                if (isLegal(board, m)) {
+                    out.add(m);
+                }
+            }
+        }
+    }
+
+    public static boolean isStalemate(Board board) {
+        if (isCleared(board)) {
+            return false;
+        }
+        if (!legalRelocates(board).isEmpty()) {
+            return false;
+        }
+        if (board.stockMut().isEmpty() && board.wasteMut().isEmpty()) {
+            return true;
+        }
+        Board cur = board.copy();
+        var seen = new java.util.HashSet<String>();
+        while (true) {
+            if (!seen.add(stockWasteKey(cur))) {
+                return true;
+            }
+            if (wasteTopPlayable(cur)) {
+                return false;
+            }
+            ApplyResult next;
+            if (!cur.stockMut().isEmpty()) {
+                next = apply(cur, Move.draw());
+            } else if (!cur.wasteMut().isEmpty()) {
+                next = apply(cur, Move.recycle());
+            } else {
+                return true;
+            }
+            if (!(next instanceof ApplyResult.Ok ok)) {
+                return true;
+            }
+            cur = ok.board();
+        }
+    }
+
+    static boolean wasteTopPlayable(Board board) {
+        if (board.wasteMut().isEmpty()) {
+            return false;
+        }
+        Location from = new Location(Pile.WASTE, 0);
+        for (int to = 0; to < 7; to++) {
+            if (isLegal(board, Move.relocate(from, new Location(Pile.TABLEAU, to), 1))) {
+                return true;
+            }
+        }
+        for (int f = 0; f < 4; f++) {
+            if (isLegal(board, Move.relocate(from, new Location(Pile.FOUNDATION, f), 1))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static String stockWasteKey(Board board) {
+        StringBuilder sb = new StringBuilder();
+        for (Card c : board.stockMut()) {
+            sb.append(c.id());
+        }
+        sb.append('/');
+        for (Card c : board.wasteMut()) {
+            sb.append(c.id());
+        }
+        return sb.toString();
+    }
+
+    static String fingerprint(Board board) {
+        StringBuilder sb = new StringBuilder(256);
+        for (int i = 0; i < 7; i++) {
+            for (Card c : board.tableauCol(i)) {
+                sb.append(c.id()).append(c.faceUp() ? '+' : '-');
+            }
+            sb.append('|');
+        }
+        for (Suit s : Suit.values()) {
+            for (Card c : board.foundation(s)) {
+                sb.append(c.id());
+            }
+            sb.append('|');
+        }
+        sb.append(stockWasteKey(board));
+        return sb.toString();
+    }
 }

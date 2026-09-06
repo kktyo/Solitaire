@@ -18,6 +18,13 @@ public final class Deal {
             }
         }
         fisherYates(deck, rng);
+        return dealFrom(deck);
+    }
+
+    static Board dealFrom(List<Card> deck) {
+        if (deck.size() != 52) {
+            throw new IllegalArgumentException("deck");
+        }
         List<List<Card>> tableau = new ArrayList<>(7);
         int idx = 0;
         for (int col = 0; col < 7; col++) {
@@ -36,6 +43,43 @@ public final class Deal {
         Board board = new Board(tableau, foundations, stock, List.of());
         BoardInvariant.assertFullDeck(board);
         return board;
+    }
+
+    public static final int WINNABLE_ATTEMPTS = 24;
+    public static final int WINNABLE_NODES = 12_000;
+    public static final int WINNABLE_FALLBACK_NODES = 80_000;
+
+    /** ソルバがクリア手順を見つけた山。手順は返さない。 */
+    public static Board winnableBoard(Random rng) {
+        for (int i = 0; i < WINNABLE_ATTEMPTS; i++) {
+            Board board = initialBoard(rng);
+            if (Solver.canClear(board, WINNABLE_NODES)) {
+                return board;
+            }
+        }
+        for (int i = 0; i < 16; i++) {
+            Board board = initialBoard(rng);
+            if (Solver.canClear(board, WINNABLE_FALLBACK_NODES)) {
+                return board;
+            }
+        }
+        Board ranked = rankedDeal(rng);
+        if (Solver.canClear(ranked, WINNABLE_FALLBACK_NODES)) {
+            return ranked;
+        }
+        throw new IllegalStateException("クリア可能な配札を生成できませんでした。");
+    }
+
+    static Board rankedDeal(Random rng) {
+        List<Suit> suits = new ArrayList<>(List.of(Suit.values()));
+        java.util.Collections.shuffle(suits, rng);
+        List<Card> deck = new ArrayList<>();
+        for (int r = 1; r <= 13; r++) {
+            for (Suit s : suits) {
+                deck.add(new Card(Rank.label(r) + s.name(), false));
+            }
+        }
+        return dealFrom(deck);
     }
 
     private static void fisherYates(List<Card> deck, Random rng) {

@@ -17,6 +17,7 @@ void main() {
         elapsedMs: 0,
         timingStartedAt: DateTime.parse('2026-09-06T00:00:00.000Z'),
         canUndo: false,
+        stalemate: false,
         board: Board(
           tableau: List.generate(7, (_) => <Card>[]),
           foundations: {for (final s in Suit.values) s: []},

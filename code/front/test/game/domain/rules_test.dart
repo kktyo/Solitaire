@@ -54,6 +54,15 @@ void main() {
     expect(result.legal, isTrue);
     expect(result.cleared, isTrue);
   });
+
+  test('TV-STALE', () {
+    final tableau = List.generate(7, (_) => <Card>[]);
+    final f = {for (final s in Suit.values) s: <Card>[]};
+    final stuck = Board(tableau: tableau, foundations: f, stock: [], waste: [Card('5H', true)]);
+    expect(Rules.isStalemate(stuck), isTrue);
+    final ace = Board(tableau: tableau, foundations: f, stock: [], waste: [Card('AH', true)]);
+    expect(Rules.isStalemate(ace), isFalse);
+  });
 }
 
 Move _move(Map<String, dynamic> n) {

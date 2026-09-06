@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../api/client.dart';
-import '../../api/models.dart';
 import '../domain/rules.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient(onAuthLost: () {
@@ -15,7 +14,6 @@ class GameSession {
     required this.server,
     this.optimisticBoard,
     this.pending,
-    this.selected,
     this.toast,
     this.error,
   });
@@ -23,7 +21,6 @@ class GameSession {
   final GameDto server;
   final Board? optimisticBoard;
   final Move? pending;
-  final Selection? selected;
   final String? toast;
   final String? error;
 
@@ -34,12 +31,10 @@ class GameSession {
     GameDto? server,
     Board? optimisticBoard,
     Move? pending,
-    Selection? selected,
     String? toast,
     String? error,
     bool clearOptimistic = false,
     bool clearPending = false,
-    bool clearSelected = false,
     bool clearToast = false,
     bool clearError = false,
   }) {
@@ -47,17 +42,10 @@ class GameSession {
       server: server ?? this.server,
       optimisticBoard: clearOptimistic ? null : (optimisticBoard ?? this.optimisticBoard),
       pending: clearPending ? null : (pending ?? this.pending),
-      selected: clearSelected ? null : (selected ?? this.selected),
       toast: clearToast ? null : (toast ?? this.toast),
       error: clearError ? null : (error ?? this.error),
     );
   }
-}
-
-class Selection {
-  Selection(this.from, this.count);
-  final Location from;
-  final int count;
 }
 
 class GameSessionController extends Notifier<GameSession?> {
@@ -84,7 +72,6 @@ class GameSessionController extends Notifier<GameSession?> {
     state = current.copyWith(
       optimisticBoard: result.board,
       pending: move,
-      clearSelected: true,
       clearToast: true,
       clearError: true,
     );
@@ -128,21 +115,6 @@ class GameSessionController extends Notifier<GameSession?> {
     } else if (b.waste.isNotEmpty) {
       play(Move.recycle());
     }
-  }
-
-  void selectOrMove(Location loc, int count) {
-    final current = state;
-    if (current == null || current.sending) return;
-    final sel = current.selected;
-    if (sel == null) {
-      state = current.copyWith(selected: Selection(loc, count));
-      return;
-    }
-    if (sel.from.pile == loc.pile && sel.from.index == loc.index) {
-      state = current.copyWith(clearSelected: true);
-      return;
-    }
-    play(Move.relocate(sel.from, loc, sel.count));
   }
 }
 

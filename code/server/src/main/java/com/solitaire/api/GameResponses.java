@@ -1,6 +1,7 @@
 package com.solitaire.api;
 
 import com.solitaire.application.GameRecord;
+import com.solitaire.domain.game.Rules;
 import com.solitaire.infra.db.BoardJsonCodec;
 
 import java.time.Instant;
@@ -26,6 +27,8 @@ public final class GameResponses {
         m.put("elapsedMs", g.getElapsedMs());
         m.put("timingStartedAt", ts(g.getTimingStartedAt()));
         m.put("canUndo", canUndo);
+        boolean stalemate = "IN_PROGRESS".equals(g.getStatus()) && Rules.isStalemate(g.getBoard());
+        m.put("stalemate", stalemate);
         m.put("board", codec.toNode(g.getBoard()));
         m.put("startedAt", ts(g.getStartedAt()));
         m.put("updatedAt", ts(g.getUpdatedAt()));

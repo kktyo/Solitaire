@@ -39,6 +39,11 @@ void main() {
     expect(find.text('1'), findsNothing);
   });
 
+  test('nine and ten pip counts', () {
+    expect(pipsFor(9).length, 9);
+    expect(pipsFor(10).length, 10);
+  });
+
   testWidgets('empty slot has no rank', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

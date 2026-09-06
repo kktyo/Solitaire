@@ -85,6 +85,7 @@ class GameApiIT {
         Map board = (Map) created.get("board");
         assertEquals(7, ((java.util.List<?>) board.get("tableau")).size());
         assertEquals(24, ((java.util.List<?>) board.get("stock")).size());
+        assertTrue(created.containsKey("stalemate"));
 
         Map drawn = http.exchange(
                         "/api/v1/games/" + gameId + "/moves",

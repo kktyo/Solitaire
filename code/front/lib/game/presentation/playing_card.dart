@@ -124,6 +124,7 @@ class _CardFace extends StatelessWidget {
     final rank = rankLabel(card);
     final suit = suitGlyph(card.suit);
     final index = _Index(rank: rank, suit: suit, color: color, cardWidth: width);
+    final densePips = card.rank == 9 || card.rank == 10;
     return ColoredBox(
       color: Colors.white,
       child: Stack(
@@ -132,7 +133,12 @@ class _CardFace extends StatelessWidget {
           Positioned(right: 0, bottom: 0, child: Transform.rotate(angle: math.pi, child: index)),
           Positioned.fill(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(width * 0.18, height * 0.16, width * 0.18, height * 0.16),
+              padding: EdgeInsets.fromLTRB(
+                width * (densePips ? 0.26 : 0.18),
+                height * (densePips ? 0.22 : 0.16),
+                width * (densePips ? 0.26 : 0.18),
+                height * (densePips ? 0.22 : 0.16),
+              ),
               child: card.rank >= 11
                   ? _FaceCenter(rank: rank, suit: suit, color: color, cardWidth: width)
                   : CustomPaint(
@@ -140,7 +146,7 @@ class _CardFace extends StatelessWidget {
                         pips: pipsFor(card.rank),
                         glyph: suit,
                         color: color,
-                        fontSize: width * (card.rank == 1 ? 0.42 : 0.22),
+                        fontSize: width * (card.rank == 1 ? 0.42 : densePips ? 0.16 : 0.22),
                       ),
                     ),
             ),
@@ -214,10 +220,6 @@ List<_Pip> pipsFor(int rank) {
   const m = 0.50;
   const upper = 0.30;
   const lower = 0.70;
-  const t2 = 0.22;
-  const b2 = 0.78;
-  const t3 = 0.36;
-  const b3 = 0.64;
   switch (rank) {
     case 1:
       return const [_Pip(c, m)];
@@ -261,28 +263,28 @@ List<_Pip> pipsFor(int rank) {
       ];
     case 9:
       return const [
-        _Pip(l, t),
-        _Pip(r, t),
-        _Pip(l, t2),
-        _Pip(r, t2),
-        _Pip(c, m),
-        _Pip(l, b2, flip: true),
-        _Pip(r, b2, flip: true),
-        _Pip(l, b, flip: true),
-        _Pip(r, b, flip: true),
+        _Pip(0.22, 0.10),
+        _Pip(0.78, 0.10),
+        _Pip(0.22, 0.32),
+        _Pip(0.78, 0.32),
+        _Pip(0.50, 0.50),
+        _Pip(0.22, 0.68, flip: true),
+        _Pip(0.78, 0.68, flip: true),
+        _Pip(0.22, 0.90, flip: true),
+        _Pip(0.78, 0.90, flip: true),
       ];
     case 10:
       return const [
-        _Pip(l, t),
-        _Pip(r, t),
-        _Pip(l, t2),
-        _Pip(r, t2),
-        _Pip(c, t3),
-        _Pip(c, b3, flip: true),
-        _Pip(l, b2, flip: true),
-        _Pip(r, b2, flip: true),
-        _Pip(l, b, flip: true),
-        _Pip(r, b, flip: true),
+        _Pip(0.22, 0.08),
+        _Pip(0.78, 0.08),
+        _Pip(0.22, 0.28),
+        _Pip(0.78, 0.28),
+        _Pip(0.50, 0.40),
+        _Pip(0.50, 0.60, flip: true),
+        _Pip(0.22, 0.72, flip: true),
+        _Pip(0.78, 0.72, flip: true),
+        _Pip(0.22, 0.92, flip: true),
+        _Pip(0.78, 0.92, flip: true),
       ];
     default:
       return const [];
