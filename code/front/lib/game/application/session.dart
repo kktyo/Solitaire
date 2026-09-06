@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../api/client.dart';
-import '../api/models.dart';
-import '../game/domain/rules.dart';
+import '../../api/client.dart';
+import '../../api/models.dart';
+import '../domain/rules.dart';
 
 final apiClientProvider = Provider<ApiClient>((ref) => ApiClient(onAuthLost: () {
       ref.read(authLoggedInProvider.notifier).state = false;
