@@ -11,7 +11,7 @@ public sealed interface ApplyResult permits ApplyResult.Ok, ApplyResult.Illegal 
     }
 
     static ApplyResult ok(Board board) {
-        boolean cleared = board.foundations().values().stream().allMatch(c -> c.size() == 13);
+        boolean cleared = board.foundations().stream().allMatch(c -> c.size() == 13);
         return new Ok(board, cleared);
     }
 }

@@ -20,7 +20,7 @@ void main() {
         stalemate: false,
         board: Board(
           tableau: List.generate(7, (_) => <Card>[]),
-          foundations: {for (final s in Suit.values) s: []},
+          foundations: List.generate(4, (_) => <Card>[]),
           stock: [Card('3C', false), Card('4C', false)],
           waste: [],
         ).toJson(),

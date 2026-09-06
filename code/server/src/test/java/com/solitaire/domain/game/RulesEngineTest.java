@@ -34,7 +34,7 @@ class RulesEngineTest {
         }
         assertEquals(24, board.stock().size());
         assertTrue(board.waste().isEmpty());
-        board.foundations().values().forEach(c -> assertTrue(c.isEmpty()));
+        board.foundations().forEach(c -> assertTrue(c.isEmpty()));
     }
 
     @Test
@@ -80,7 +80,7 @@ class RulesEngineTest {
                 Move.relocate(new Location(Pile.TABLEAU, 0), new Location(Pile.FOUNDATION, 0), 1));
         ApplyResult.Ok ok = assertInstanceOf(ApplyResult.Ok.class, result);
         assertTrue(ok.cleared());
-        assertEquals(13, ok.board().foundations().get(Suit.S).size());
+        assertEquals(13, ok.board().foundations().get(0).size());
     }
 
     @Test
@@ -138,11 +138,11 @@ class RulesEngineTest {
             assertEquals(expect.get("tableau0TopFaceUp").asBoolean(), col.get(col.size() - 1).faceUp(), id);
         }
         if (expect.has("foundationSTop")) {
-            List<Card> col = board.foundations().get(Suit.S);
+            List<Card> col = board.foundations().get(0);
             assertEquals(expect.get("foundationSTop").asText(), col.get(col.size() - 1).id(), id);
         }
         if (expect.has("foundationSLen")) {
-            assertEquals(expect.get("foundationSLen").asInt(), board.foundations().get(Suit.S).size(), id);
+            assertEquals(expect.get("foundationSLen").asInt(), board.foundations().get(0).size(), id);
         }
         if (expect.has("stockLen")) {
             assertEquals(expect.get("stockLen").asInt(), board.stock().size(), id);
@@ -173,10 +173,17 @@ class RulesEngineTest {
     private static Board readBoard(JsonNode n) {
         List<List<Card>> tableau = new ArrayList<>();
         n.get("tableau").forEach(col -> tableau.add(readCards(col)));
-        Map<Suit, List<Card>> foundations = new EnumMap<>(Suit.class);
         JsonNode f = n.get("foundations");
-        for (Suit s : Suit.values()) {
-            foundations.put(s, readCards(f.get(s.name())));
+        List<List<Card>> foundations;
+        if (f != null && f.isArray()) {
+            foundations = new ArrayList<>();
+            f.forEach(col -> foundations.add(readCards(col)));
+        } else {
+            Map<Suit, List<Card>> bySuit = new EnumMap<>(Suit.class);
+            for (Suit s : Suit.values()) {
+                bySuit.put(s, readCards(f.get(s.name())));
+            }
+            foundations = Board.fromSuitMap(bySuit);
         }
         return new Board(tableau, foundations, readCards(n.get("stock")), readCards(n.get("waste")));
     }

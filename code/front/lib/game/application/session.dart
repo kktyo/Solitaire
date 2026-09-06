@@ -16,6 +16,7 @@ class GameSession {
     this.pending,
     this.toast,
     this.error,
+    this.autoPlaying = false,
   });
 
   final GameDto server;
@@ -23,9 +24,11 @@ class GameSession {
   final Move? pending;
   final String? toast;
   final String? error;
+  final bool autoPlaying;
 
   Board get displayBoard => optimisticBoard ?? Board.fromJson(server.board);
   bool get sending => pending != null;
+  bool get busy => pending != null || autoPlaying;
 
   GameSession copyWith({
     GameDto? server,
@@ -33,6 +36,7 @@ class GameSession {
     Move? pending,
     String? toast,
     String? error,
+    bool? autoPlaying,
     bool clearOptimistic = false,
     bool clearPending = false,
     bool clearToast = false,
@@ -44,11 +48,15 @@ class GameSession {
       pending: clearPending ? null : (pending ?? this.pending),
       toast: clearToast ? null : (toast ?? this.toast),
       error: clearError ? null : (error ?? this.error),
+      autoPlaying: autoPlaying ?? this.autoPlaying,
     );
   }
 }
 
 class GameSessionController extends Notifier<GameSession?> {
+  bool _auto = false;
+  bool _skipAuto = false;
+
   @override
   GameSession? build() => null;
 
@@ -56,18 +64,30 @@ class GameSessionController extends Notifier<GameSession?> {
 
   void load(GameDto game) {
     state = GameSession(server: game);
+    Future.microtask(_autoComplete);
   }
 
   Future<void> play(Move move) async {
+    if (state?.busy == true) {
+      return;
+    }
+    _skipAuto = false;
+    final ok = await _submit(move);
+    if (ok) {
+      await _autoComplete();
+    }
+  }
+
+  Future<bool> _submit(Move move) async {
     final current = state;
     if (current == null || current.sending) {
-      return;
+      return false;
     }
     final board = current.displayBoard;
     final result = Rules.apply(board, move);
     if (!result.legal) {
       state = current.copyWith(toast: 'その移動はできません。');
-      return;
+      return false;
     }
     state = current.copyWith(
       optimisticBoard: result.board,
@@ -77,26 +97,75 @@ class GameSessionController extends Notifier<GameSession?> {
     );
     try {
       final next = await _api.applyMove(current.server.gameId, current.server.version, move.toJson());
-      state = GameSession(server: next);
+      state = GameSession(server: next, autoPlaying: _auto);
+      return true;
     } on ApiException catch (e) {
       if (e.status == 409) {
         final g = e.details['game'];
         if (g is Map<String, dynamic>) {
-          state = GameSession(server: GameDto.fromJson(g));
-          return;
+          state = GameSession(server: GameDto.fromJson(g), autoPlaying: _auto);
         }
+        return false;
       }
       if (e.status == 422) {
-        state = GameSession(server: current.server, toast: e.message);
-        return;
+        state = GameSession(server: current.server, toast: e.message, autoPlaying: _auto);
+        return false;
       }
-      state = GameSession(server: current.server, error: e.message);
+      state = GameSession(server: current.server, error: e.message, autoPlaying: _auto);
+      return false;
+    }
+  }
+
+  Future<void> _autoComplete() async {
+    if (_auto || _skipAuto) {
+      return;
+    }
+    _auto = true;
+    final started = state;
+    if (started != null) {
+      state = started.copyWith(autoPlaying: true);
+    }
+    try {
+      var idle = 0;
+      while (true) {
+        final current = state;
+        if (current == null || current.sending || current.server.status != 'IN_PROGRESS') {
+          break;
+        }
+        final b = current.displayBoard;
+        if (!Rules.tableauAllFaceUp(b) || Rules.isCleared(b)) {
+          break;
+        }
+        final m = Rules.nextAutoMove(b);
+        if (m == null) {
+          break;
+        }
+        if (m.type != MoveType.move) {
+          idle++;
+          if (idle > 52) {
+            break;
+          }
+        } else {
+          idle = 0;
+        }
+        final ok = await _submit(m);
+        if (!ok) {
+          break;
+        }
+      }
+    } finally {
+      _auto = false;
+      final end = state;
+      if (end != null && end.autoPlaying) {
+        state = end.copyWith(autoPlaying: false);
+      }
     }
   }
 
   Future<void> undo() async {
     final current = state;
-    if (current == null || current.sending || !current.server.canUndo) return;
+    if (current == null || current.busy || !current.server.canUndo) return;
+    _skipAuto = true;
     try {
       state = current.copyWith(pending: Move.draw(), clearToast: true);
       final next = await _api.undo(current.server.gameId, current.server.version);
@@ -108,7 +177,7 @@ class GameSessionController extends Notifier<GameSession?> {
 
   void tapStock() {
     final current = state;
-    if (current == null) return;
+    if (current == null || current.busy) return;
     final b = current.displayBoard;
     if (b.stock.isNotEmpty) {
       play(Move.draw());

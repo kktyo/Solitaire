@@ -2,7 +2,6 @@ package com.solitaire.domain.game;
 
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public final class BoardInvariant {
@@ -13,10 +12,8 @@ public final class BoardInvariant {
         if (board.tableau().size() != 7) {
             throw new IllegalStateException("tableau must have 7 columns");
         }
-        for (Suit s : Suit.values()) {
-            if (!board.foundations().containsKey(s)) {
-                throw new IllegalStateException("missing foundation " + s);
-            }
+        if (board.foundations().size() != 4) {
+            throw new IllegalStateException("foundations must have 4 slots");
         }
         for (Card c : board.stock()) {
             if (c.faceUp()) {
@@ -28,17 +25,21 @@ public final class BoardInvariant {
                 throw new IllegalStateException("waste must be face up");
             }
         }
-        for (Map.Entry<Suit, List<Card>> e : board.foundations().entrySet()) {
-            List<Card> col = e.getValue();
+        Set<Suit> used = new HashSet<>();
+        for (List<Card> col : board.foundations()) {
             for (int i = 0; i < col.size(); i++) {
                 Card c = col.get(i);
-                if (!c.faceUp() || c.suit() != e.getKey()) {
+                if (!c.faceUp()) {
                     throw new IllegalStateException("bad foundation");
                 }
-                if (i == 0 && c.rank() != 1) {
-                    throw new IllegalStateException("foundation must start with A");
-                }
-                if (i > 0 && c.rank() != col.get(i - 1).rank() + 1) {
+                if (i == 0) {
+                    if (c.rank() != 1) {
+                        throw new IllegalStateException("foundation must start with A");
+                    }
+                    if (!used.add(c.suit())) {
+                        throw new IllegalStateException("duplicate foundation suit");
+                    }
+                } else if (c.suit() != col.get(0).suit() || c.rank() != col.get(i - 1).rank() + 1) {
                     throw new IllegalStateException("foundation rank");
                 }
             }
@@ -78,7 +79,7 @@ public final class BoardInvariant {
                 ids.add(c.id());
             }
         }
-        for (List<Card> col : board.foundations().values()) {
+        for (List<Card> col : board.foundations()) {
             for (Card c : col) {
                 ids.add(c.id());
             }

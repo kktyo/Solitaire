@@ -141,8 +141,8 @@
       "expect": { "cleared": false, "foundationSTop": "AS" }
     },
     {
-      "id": "TV-FOUND-A-WRONG-SUIT",
-      "description": "ハート枠へ AS は不可",
+      "id": "TV-FOUND-A-ANY-SLOT",
+      "description": "空枠ならスートを問わず A を置ける",
       "skipFullDeckInvariant": true,
       "board": {
         "tableau": [
@@ -164,7 +164,8 @@
         "to": { "pile": "FOUNDATION", "index": 1 },
         "count": 1
       },
-      "legal": false
+      "legal": true,
+      "expect": { "cleared": false }
     },
     {
       "id": "TV-FOUND-UP",

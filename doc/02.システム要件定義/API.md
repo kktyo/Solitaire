@@ -46,12 +46,7 @@
 ```json
 {
   "tableau": [ [ { "id": "KC", "faceUp": true } ], [], [], [], [], [], [] ],
-  "foundations": {
-    "S": [],
-    "H": [],
-    "D": [],
-    "C": []
-  },
+  "foundations": [ [], [], [], [] ],
   "stock": [ { "id": "2D", "faceUp": false } ],
   "waste": [ { "id": "AH", "faceUp": true } ]
 }
@@ -60,7 +55,8 @@
 - `tableau`: 長さ 7。各列は底→表の順（末尾がトップ）。
 - `stock`: 先頭が次にめくるカード。すべて `faceUp: false`。
 - `waste`: 末尾がトップ。すべて `faceUp: true`。
-- `foundations.*`: 底が A 側、末尾がトップ。表向き。
+- `foundations`: 長さ 4 の配列。枠 0..3。各列は空、または底が A（その枠のスート）、末尾がトップ。すべて表向き。
+- 読み取り互換: 旧オブジェクト `{ "S","H","D","C" }` は枠順 S→H→D→C として解釈してよい。新規・書き込みは配列のみ。
 
 **GameResponse**
 
@@ -212,7 +208,7 @@ Bearer 必須。本文 `{ "refreshToken": "…" }`。成功 `204`。当該 refre
 | `RECYCLE` | なし | 捨て札を山札へ戻す |
 
 `pile`: `TABLEAU` | `FOUNDATION` | `STOCK` | `WASTE`。  
-`index`: 場札 0–6、組札 0–3（S,H,D,C の順）。STOCK/WASTE では 0 固定または省略。
+`index`: 場札 0–6、組札 0–3（枠番号。スート固定ではない）。STOCK/WASTE では 0 固定または省略。
 
 成功 `200` GameResponse。クリア直後は `status: CLEARED`、`canUndo: false`、結果が永続化されていること。
 

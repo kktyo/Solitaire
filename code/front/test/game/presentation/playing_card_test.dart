@@ -44,6 +44,17 @@ void main() {
     expect(pipsFor(10).length, 10);
   });
 
+  test('nine and ten side pips sit outward', () {
+    for (final rank in [9, 10]) {
+      for (final pip in pipsFor(rank)) {
+        if (pip.x == 0.5) {
+          continue;
+        }
+        expect(pip.x, anyOf(closeTo(0.12, 0.001), closeTo(0.88, 0.001)));
+      }
+    }
+  });
+
   testWidgets('empty slot has no rank', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(

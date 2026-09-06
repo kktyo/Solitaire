@@ -2,7 +2,6 @@ package com.solitaire.domain.game;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 public final class Rules {
 
@@ -121,11 +120,10 @@ public final class Rules {
                 if (count != 1) {
                     yield null;
                 }
-                Suit s = suitOf(from.index());
-                if (s == null) {
+                if (from.index() < 0 || from.index() > 3) {
                     yield null;
                 }
-                List<Card> col = board.foundation(s);
+                List<Card> col = board.foundationSlot(from.index());
                 if (col.isEmpty()) {
                     yield null;
                 }
@@ -153,16 +151,28 @@ public final class Rules {
                 if (count != 1) {
                     yield false;
                 }
-                Suit s = suitOf(to.index());
-                if (s == null || first.suit() != s) {
+                int i = to.index();
+                if (i < 0 || i > 3) {
                     yield false;
                 }
-                List<Card> col = board.foundation(s);
+                List<Card> col = board.foundationSlot(i);
                 if (col.isEmpty()) {
-                    yield first.rank() == 1;
+                    if (first.rank() != 1) {
+                        yield false;
+                    }
+                    for (int s = 0; s < 4; s++) {
+                        if (s == i) {
+                            continue;
+                        }
+                        List<Card> other = board.foundationSlot(s);
+                        if (!other.isEmpty() && other.get(0).suit() == first.suit()) {
+                            yield false;
+                        }
+                    }
+                    yield true;
                 }
                 Card top = col.get(col.size() - 1);
-                yield first.rank() == top.rank() + 1;
+                yield first.suit() == top.suit() && first.rank() == top.rank() + 1;
             }
             case STOCK, WASTE -> false;
         };
@@ -178,7 +188,7 @@ public final class Rules {
             }
             case WASTE -> board.wasteMut().remove(board.wasteMut().size() - 1);
             case FOUNDATION -> {
-                List<Card> col = board.foundation(Objects.requireNonNull(suitOf(from.index())));
+                List<Card> col = board.foundationSlot(from.index());
                 col.remove(col.size() - 1);
             }
             case STOCK -> {
@@ -190,7 +200,7 @@ public final class Rules {
     private static void append(Board board, Location to, List<Card> cards) {
         switch (to.pile()) {
             case TABLEAU -> board.tableauCol(to.index()).addAll(cards);
-            case FOUNDATION -> board.foundation(Objects.requireNonNull(suitOf(to.index()))).addAll(cards);
+            case FOUNDATION -> board.foundationSlot(to.index()).addAll(cards);
             case STOCK, WASTE -> throw new IllegalStateException("cannot move to stock/waste");
         }
     }
@@ -206,16 +216,9 @@ public final class Rules {
         }
     }
 
-    private static Suit suitOf(int index) {
-        if (index < 0 || index > 3) {
-            return null;
-        }
-        return Suit.ofIndex(index);
-    }
-
     public static boolean isCleared(Board board) {
-        for (Suit s : Suit.values()) {
-            if (board.foundation(s).size() != 13) {
+        for (int i = 0; i < 4; i++) {
+            if (board.foundationSlot(i).size() != 13) {
                 return false;
             }
         }
@@ -239,7 +242,7 @@ public final class Rules {
             addRelocates(board, new Location(Pile.WASTE, 0), 1, out);
         }
         for (int f = 0; f < 4; f++) {
-            if (!board.foundation(Suit.ofIndex(f)).isEmpty()) {
+            if (!board.foundationSlot(f).isEmpty()) {
                 addRelocates(board, new Location(Pile.FOUNDATION, f), 1, out);
             }
         }
@@ -341,13 +344,39 @@ public final class Rules {
             }
             sb.append('|');
         }
-        for (Suit s : Suit.values()) {
-            for (Card c : board.foundation(s)) {
+        for (int i = 0; i < 4; i++) {
+            for (Card c : board.foundationSlot(i)) {
                 sb.append(c.id());
             }
             sb.append('|');
         }
         sb.append(stockWasteKey(board));
         return sb.toString();
+    }
+
+    public static Move nextAutoMove(Board board) {
+        for (Move m : legalRelocates(board)) {
+            if (m.to() != null && m.to().pile() == Pile.FOUNDATION) {
+                return m;
+            }
+        }
+        if (!board.stockMut().isEmpty()) {
+            return Move.draw();
+        }
+        if (!board.wasteMut().isEmpty()) {
+            return Move.recycle();
+        }
+        return null;
+    }
+
+    public static boolean tableauAllFaceUp(Board board) {
+        for (int i = 0; i < 7; i++) {
+            for (Card c : board.tableauCol(i)) {
+                if (!c.faceUp()) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 }

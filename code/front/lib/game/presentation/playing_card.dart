@@ -124,7 +124,6 @@ class _CardFace extends StatelessWidget {
     final rank = rankLabel(card);
     final suit = suitGlyph(card.suit);
     final index = _Index(rank: rank, suit: suit, color: color, cardWidth: width);
-    final densePips = card.rank == 9 || card.rank == 10;
     return ColoredBox(
       color: Colors.white,
       child: Stack(
@@ -133,12 +132,7 @@ class _CardFace extends StatelessWidget {
           Positioned(right: 0, bottom: 0, child: Transform.rotate(angle: math.pi, child: index)),
           Positioned.fill(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                width * (densePips ? 0.26 : 0.18),
-                height * (densePips ? 0.22 : 0.16),
-                width * (densePips ? 0.26 : 0.18),
-                height * (densePips ? 0.22 : 0.16),
-              ),
+              padding: EdgeInsets.fromLTRB(width * 0.18, height * 0.16, width * 0.18, height * 0.16),
               child: card.rank >= 11
                   ? _FaceCenter(rank: rank, suit: suit, color: color, cardWidth: width)
                   : CustomPaint(
@@ -146,7 +140,7 @@ class _CardFace extends StatelessWidget {
                         pips: pipsFor(card.rank),
                         glyph: suit,
                         color: color,
-                        fontSize: width * (card.rank == 1 ? 0.42 : densePips ? 0.16 : 0.22),
+                        fontSize: width * (card.rank == 1 ? 0.42 : 0.22),
                       ),
                     ),
             ),
@@ -204,16 +198,18 @@ class _Index extends StatelessWidget {
   }
 }
 
-class _Pip {
-  const _Pip(this.x, this.y, {this.flip = false});
+class CardPip {
+  const CardPip(this.x, this.y, {this.flip = false});
   final double x;
   final double y;
   final bool flip;
 }
 
-List<_Pip> pipsFor(int rank) {
+List<CardPip> pipsFor(int rank) {
   const l = 0.22;
   const r = 0.78;
+  const outerL = 0.12;
+  const outerR = 0.88;
   const c = 0.50;
   const t = 0.08;
   const b = 0.92;
@@ -222,69 +218,69 @@ List<_Pip> pipsFor(int rank) {
   const lower = 0.70;
   switch (rank) {
     case 1:
-      return const [_Pip(c, m)];
+      return const [CardPip(c, m)];
     case 2:
-      return const [_Pip(c, t), _Pip(c, b, flip: true)];
+      return const [CardPip(c, t), CardPip(c, b, flip: true)];
     case 3:
-      return const [_Pip(c, t), _Pip(c, m), _Pip(c, b, flip: true)];
+      return const [CardPip(c, t), CardPip(c, m), CardPip(c, b, flip: true)];
     case 4:
-      return const [_Pip(l, t), _Pip(r, t), _Pip(l, b, flip: true), _Pip(r, b, flip: true)];
+      return const [CardPip(l, t), CardPip(r, t), CardPip(l, b, flip: true), CardPip(r, b, flip: true)];
     case 5:
-      return const [_Pip(l, t), _Pip(r, t), _Pip(c, m), _Pip(l, b, flip: true), _Pip(r, b, flip: true)];
+      return const [CardPip(l, t), CardPip(r, t), CardPip(c, m), CardPip(l, b, flip: true), CardPip(r, b, flip: true)];
     case 6:
       return const [
-        _Pip(l, t),
-        _Pip(r, t),
-        _Pip(l, m),
-        _Pip(r, m),
-        _Pip(l, b, flip: true),
-        _Pip(r, b, flip: true),
+        CardPip(l, t),
+        CardPip(r, t),
+        CardPip(l, m),
+        CardPip(r, m),
+        CardPip(l, b, flip: true),
+        CardPip(r, b, flip: true),
       ];
     case 7:
       return const [
-        _Pip(l, t),
-        _Pip(r, t),
-        _Pip(c, upper),
-        _Pip(l, m),
-        _Pip(r, m),
-        _Pip(l, b, flip: true),
-        _Pip(r, b, flip: true),
+        CardPip(l, t),
+        CardPip(r, t),
+        CardPip(c, upper),
+        CardPip(l, m),
+        CardPip(r, m),
+        CardPip(l, b, flip: true),
+        CardPip(r, b, flip: true),
       ];
     case 8:
       return const [
-        _Pip(l, t),
-        _Pip(r, t),
-        _Pip(c, upper),
-        _Pip(l, m),
-        _Pip(r, m),
-        _Pip(c, lower, flip: true),
-        _Pip(l, b, flip: true),
-        _Pip(r, b, flip: true),
+        CardPip(l, t),
+        CardPip(r, t),
+        CardPip(c, upper),
+        CardPip(l, m),
+        CardPip(r, m),
+        CardPip(c, lower, flip: true),
+        CardPip(l, b, flip: true),
+        CardPip(r, b, flip: true),
       ];
     case 9:
       return const [
-        _Pip(0.22, 0.10),
-        _Pip(0.78, 0.10),
-        _Pip(0.22, 0.32),
-        _Pip(0.78, 0.32),
-        _Pip(0.50, 0.50),
-        _Pip(0.22, 0.68, flip: true),
-        _Pip(0.78, 0.68, flip: true),
-        _Pip(0.22, 0.90, flip: true),
-        _Pip(0.78, 0.90, flip: true),
+        CardPip(outerL, 0.10),
+        CardPip(outerR, 0.10),
+        CardPip(outerL, 0.32),
+        CardPip(outerR, 0.32),
+        CardPip(c, 0.50),
+        CardPip(outerL, 0.68, flip: true),
+        CardPip(outerR, 0.68, flip: true),
+        CardPip(outerL, 0.90, flip: true),
+        CardPip(outerR, 0.90, flip: true),
       ];
     case 10:
       return const [
-        _Pip(0.22, 0.08),
-        _Pip(0.78, 0.08),
-        _Pip(0.22, 0.28),
-        _Pip(0.78, 0.28),
-        _Pip(0.50, 0.40),
-        _Pip(0.50, 0.60, flip: true),
-        _Pip(0.22, 0.72, flip: true),
-        _Pip(0.78, 0.72, flip: true),
-        _Pip(0.22, 0.92, flip: true),
-        _Pip(0.78, 0.92, flip: true),
+        CardPip(outerL, 0.08),
+        CardPip(outerR, 0.08),
+        CardPip(outerL, 0.28),
+        CardPip(outerR, 0.28),
+        CardPip(c, 0.40),
+        CardPip(c, 0.60, flip: true),
+        CardPip(outerL, 0.72, flip: true),
+        CardPip(outerR, 0.72, flip: true),
+        CardPip(outerL, 0.92, flip: true),
+        CardPip(outerR, 0.92, flip: true),
       ];
     default:
       return const [];
@@ -294,7 +290,7 @@ List<_Pip> pipsFor(int rank) {
 class _PipPainter extends CustomPainter {
   _PipPainter({required this.pips, required this.glyph, required this.color, required this.fontSize});
 
-  final List<_Pip> pips;
+  final List<CardPip> pips;
   final String glyph;
   final Color color;
   final double fontSize;

@@ -41,11 +41,10 @@ void main() {
   test('TV-CLEAR', () {
     final tableau = List.generate(7, (_) => <Card>[]);
     tableau[0].add(Card('KS', true));
-    final f = <Suit, List<Card>>{};
-    for (final s in Suit.values) {
-      final max = s == Suit.s ? 12 : 13;
-      f[s] = [for (var r = 1; r <= max; r++) Card('${Deal.ranks[r - 1]}${s.code}', true)];
-    }
+    final f = [
+      for (final s in Suit.values)
+        [for (var r = 1; r <= (s == Suit.s ? 12 : 13); r++) Card('${Deal.ranks[r - 1]}${s.code}', true)],
+    ];
     final board = Board(tableau: tableau, foundations: f, stock: [], waste: []);
     final result = Rules.apply(
       board,
@@ -57,11 +56,26 @@ void main() {
 
   test('TV-STALE', () {
     final tableau = List.generate(7, (_) => <Card>[]);
-    final f = {for (final s in Suit.values) s: <Card>[]};
+    final f = List.generate(4, (_) => <Card>[]);
     final stuck = Board(tableau: tableau, foundations: f, stock: [], waste: [Card('5H', true)]);
     expect(Rules.isStalemate(stuck), isTrue);
     final ace = Board(tableau: tableau, foundations: f, stock: [], waste: [Card('AH', true)]);
     expect(Rules.isStalemate(ace), isFalse);
+  });
+
+  test('nextAutoMove prefers foundation then draw', () {
+    final empty = List.generate(7, (_) => <Card>[]);
+    empty[0] = [Card('AH', true)];
+    final board = Board(
+      tableau: empty,
+      foundations: List.generate(4, (_) => <Card>[]),
+      stock: [Card('2C', false)],
+      waste: [],
+    );
+    expect(Rules.tableauAllFaceUp(board), isTrue);
+    final m = Rules.nextAutoMove(board)!;
+    expect(m.type, MoveType.move);
+    expect(m.to!.pile, Pile.foundation);
   });
 }
 
@@ -101,10 +115,10 @@ void _assertExpect(String id, Board board, Map<String, dynamic> expectMap) {
     expect(board.tableau[0].last.faceUp, expectMap['tableau0TopFaceUp'], reason: id);
   }
   if (expectMap.containsKey('foundationSTop')) {
-    expect(board.foundations[Suit.s]!.last.id, expectMap['foundationSTop'], reason: id);
+    expect(board.foundations[0].last.id, expectMap['foundationSTop'], reason: id);
   }
   if (expectMap.containsKey('foundationSLen')) {
-    expect(board.foundations[Suit.s]!.length, expectMap['foundationSLen'], reason: id);
+    expect(board.foundations[0].length, expectMap['foundationSLen'], reason: id);
   }
   if (expectMap.containsKey('stockLen')) {
     expect(board.stock.length, expectMap['stockLen'], reason: id);

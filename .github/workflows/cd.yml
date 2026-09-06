@@ -47,7 +47,6 @@ jobs:
           flutter test
 
   test-e2e:
-    needs: [test-server, test-front]
     uses: ./.github/workflows/e2e.yml
     secrets: inherit
 

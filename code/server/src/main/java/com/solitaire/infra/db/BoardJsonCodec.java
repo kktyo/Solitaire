@@ -78,9 +78,9 @@ public class BoardJsonCodec implements com.solitaire.application.GameApplication
         for (List<Card> col : board.tableau()) {
             tab.add(cards(col));
         }
-        ObjectNode f = n.putObject("foundations");
-        for (Suit s : Suit.values()) {
-            f.set(s.name(), cards(board.foundations().get(s)));
+        ArrayNode f = n.putArray("foundations");
+        for (List<Card> col : board.foundations()) {
+            f.add(cards(col));
         }
         n.set("stock", cards(board.stock()));
         n.set("waste", cards(board.waste()));
@@ -117,10 +117,22 @@ public class BoardJsonCodec implements com.solitaire.application.GameApplication
         for (JsonNode col : n.path("tableau")) {
             tableau.add(readCards(col));
         }
-        Map<Suit, List<Card>> foundations = new EnumMap<>(Suit.class);
         JsonNode f = n.path("foundations");
-        for (Suit s : Suit.values()) {
-            foundations.put(s, readCards(f.path(s.name())));
+        List<List<Card>> foundations;
+        if (f.isArray()) {
+            foundations = new ArrayList<>(4);
+            for (JsonNode col : f) {
+                foundations.add(readCards(col));
+            }
+            while (foundations.size() < 4) {
+                foundations.add(new ArrayList<>());
+            }
+        } else {
+            Map<Suit, List<Card>> bySuit = new EnumMap<>(Suit.class);
+            for (Suit s : Suit.values()) {
+                bySuit.put(s, readCards(f.path(s.name())));
+            }
+            foundations = Board.fromSuitMap(bySuit);
         }
         return new Board(tableau, foundations, readCards(n.path("stock")), readCards(n.path("waste")));
     }

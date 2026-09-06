@@ -66,16 +66,16 @@ class Move {
 class Board {
   Board({
     required List<List<Card>> tableau,
-    required Map<Suit, List<Card>> foundations,
+    required List<List<Card>> foundations,
     required List<Card> stock,
     required List<Card> waste,
   })  : tableau = tableau.map((c) => List<Card>.from(c)).toList(),
-        foundations = {for (final s in Suit.values) s: List<Card>.from(foundations[s] ?? [])},
+        foundations = List.generate(4, (i) => List<Card>.from(i < foundations.length ? foundations[i] : const [])),
         stock = List<Card>.from(stock),
         waste = List<Card>.from(waste);
 
   final List<List<Card>> tableau;
-  final Map<Suit, List<Card>> foundations;
+  final List<List<Card>> foundations;
   final List<Card> stock;
   final List<Card> waste;
 
@@ -83,10 +83,16 @@ class Board {
 
   factory Board.fromJson(Map<String, dynamic> json) {
     List<Card> cards(dynamic raw) =>
-        (raw as List).map((e) => Card(e['id'] as String, e['faceUp'] as bool)).toList();
+        (raw as List? ?? const []).map((e) => Card(e['id'] as String, e['faceUp'] as bool)).toList();
     final tab = (json['tableau'] as List).map((c) => cards(c)).toList();
-    final fRaw = json['foundations'] as Map<String, dynamic>;
-    final f = {for (final s in Suit.values) s: cards(fRaw[s.code])};
+    final rawF = json['foundations'];
+    late final List<List<Card>> f;
+    if (rawF is List) {
+      f = rawF.map((c) => cards(c)).toList();
+    } else {
+      final m = Map<String, dynamic>.from(rawF as Map);
+      f = [for (final s in Suit.values) cards(m[s.code])];
+    }
     return Board(tableau: tab, foundations: f, stock: cards(json['stock']), waste: cards(json['waste']));
   }
 
@@ -94,10 +100,7 @@ class Board {
         'tableau': tableau
             .map((c) => c.map((e) => {'id': e.id, 'faceUp': e.faceUp}).toList())
             .toList(),
-        'foundations': {
-          for (final s in Suit.values)
-            s.code: foundations[s]!.map((e) => {'id': e.id, 'faceUp': e.faceUp}).toList(),
-        },
+        'foundations': foundations.map((c) => c.map((e) => {'id': e.id, 'faceUp': e.faceUp}).toList()).toList(),
         'stock': stock.map((e) => {'id': e.id, 'faceUp': e.faceUp}).toList(),
         'waste': waste.map((e) => {'id': e.id, 'faceUp': e.faceUp}).toList(),
       };
@@ -142,7 +145,7 @@ class Deal {
     }
     return Board(
       tableau: tableau,
-      foundations: {for (final s in Suit.values) s: <Card>[]},
+      foundations: List.generate(4, (_) => <Card>[]),
       stock: deck.sublist(idx),
       waste: [],
     );
@@ -223,7 +226,7 @@ class Rules {
         return [board.waste.last];
       case Pile.foundation:
         if (count != 1 || from.index < 0 || from.index > 3) return null;
-        final col = board.foundations[Suit.values[from.index]]!;
+        final col = board.foundations[from.index];
         if (col.isEmpty) return null;
         return [col.last];
       case Pile.stock:
@@ -241,11 +244,18 @@ class Rules {
         return first.red != top.red && first.rank == top.rank - 1;
       case Pile.foundation:
         if (count != 1 || to.index < 0 || to.index > 3) return false;
-        final s = Suit.values[to.index];
-        if (first.suit != s) return false;
-        final col = board.foundations[s]!;
-        if (col.isEmpty) return first.rank == 1;
-        return first.rank == col.last.rank + 1;
+        final col = board.foundations[to.index];
+        if (col.isEmpty) {
+          if (first.rank != 1) return false;
+          for (var s = 0; s < 4; s++) {
+            if (s == to.index) continue;
+            final other = board.foundations[s];
+            if (other.isNotEmpty && other.first.suit == first.suit) return false;
+          }
+          return true;
+        }
+        final top = col.last;
+        return first.suit == top.suit && first.rank == top.rank + 1;
       case Pile.stock:
       case Pile.waste:
         return false;
@@ -260,7 +270,7 @@ class Rules {
       case Pile.waste:
         board.waste.removeLast();
       case Pile.foundation:
-        board.foundations[Suit.values[from.index]]!.removeLast();
+        board.foundations[from.index].removeLast();
       case Pile.stock:
         break;
     }
@@ -271,7 +281,7 @@ class Rules {
       case Pile.tableau:
         board.tableau[to.index].addAll(cards);
       case Pile.foundation:
-        board.foundations[Suit.values[to.index]]!.addAll(cards);
+        board.foundations[to.index].addAll(cards);
       case Pile.stock:
       case Pile.waste:
         break;
@@ -293,7 +303,7 @@ class Rules {
     return ApplyResult.ok(b, isCleared(b));
   }
 
-  static bool isCleared(Board board) => board.foundations.values.every((c) => c.length == 13);
+  static bool isCleared(Board board) => board.foundations.every((c) => c.length == 13);
 
   static List<Move> legalRelocates(Board board) {
     final out = <Move>[];
@@ -323,7 +333,7 @@ class Rules {
       addFrom(Location(Pile.waste, 0), 1);
     }
     for (var f = 0; f < 4; f++) {
-      if (board.foundations[Suit.values[f]]!.isNotEmpty) {
+      if (board.foundations[f].isNotEmpty) {
         addFrom(Location(Pile.foundation, f), 1);
       }
     }
@@ -374,5 +384,16 @@ class Rules {
       ids.write(c.id);
     }
     return ids.toString();
+  }
+
+  static bool tableauAllFaceUp(Board board) => board.tableau.every((col) => col.every((c) => c.faceUp));
+
+  static Move? nextAutoMove(Board board) {
+    for (final m in legalRelocates(board)) {
+      if (m.to?.pile == Pile.foundation) return m;
+    }
+    if (board.stock.isNotEmpty) return Move.draw();
+    if (board.waste.isNotEmpty) return Move.recycle();
+    return null;
   }
 }

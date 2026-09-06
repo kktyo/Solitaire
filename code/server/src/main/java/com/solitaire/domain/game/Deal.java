@@ -1,9 +1,7 @@
 package com.solitaire.domain.game;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Random;
 
 public final class Deal {
@@ -36,11 +34,7 @@ public final class Deal {
             tableau.add(pile);
         }
         List<Card> stock = new ArrayList<>(deck.subList(idx, deck.size()));
-        Map<Suit, List<Card>> foundations = new EnumMap<>(Suit.class);
-        for (Suit s : Suit.values()) {
-            foundations.put(s, new ArrayList<>());
-        }
-        Board board = new Board(tableau, foundations, stock, List.of());
+        Board board = new Board(tableau, Board.emptyFoundations(), stock, List.of());
         BoardInvariant.assertFullDeck(board);
         return board;
     }

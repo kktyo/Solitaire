@@ -67,8 +67,8 @@ public final class Solver {
 
     private static int foundationCount(Board board) {
         int n = 0;
-        for (Suit s : Suit.values()) {
-            n += board.foundation(s).size();
+        for (int i = 0; i < 4; i++) {
+            n += board.foundationSlot(i).size();
         }
         return n;
     }
