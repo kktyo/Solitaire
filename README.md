@@ -1,6 +1,6 @@
 # ソリティア（Klondike）
 
-ログイン利用者が Draw 1 の Klondike を遊び、進行中対局の保存・再開とサーバ検証済みクリア結果を扱うアプリです。正本は `doc/` です。
+ログイン利用者が Draw 1 の Klondike を遊び、進行中対局の保存・再開とサーバ検証済みクリア結果を扱うアプリです。正本は `doc/` です。本番契約は `infra/azure-container-apps-契約.txt` です。
 
 ## 構成
 
@@ -9,7 +9,7 @@ doc/                 仕様・設計
 code/front/          Flutter
 code/server/         Spring Boot 3 / Java 21
 code/docker/         Compose と API Dockerfile
-infra/main.bicep     App Service Plan・スロット・自動スケール・Azure SQL・ACR
+infra/main.bicep     Azure SQL + Container Apps Consumption
 ```
 
 ## ローカル起動
@@ -42,14 +42,15 @@ GitHub Actions:
 | ワークフロー | 内容 |
 | --- | --- |
 | `ci-server.yml` | Gradle / JUnit（Testcontainers はランナーに Docker があるとき） |
-| `ci-front.yml` | `flutter test`。APK は失敗してもサーバ CD は止めない |
-| `cd-staging.yml` | main のサーバ変更でイメージを ACR へ push し **staging スロット**へ。ヘルス `/api/v1/health` |
-| `swap-production.yml` | 手動で staging → production スワップ |
+| `ci-front.yml` | `flutter test` と debug APK |
+| `cd.yml` | サーバテスト後、イメージを GHCR へ push し Container Apps を更新。ヘルス `/api/v1/health` |
 
 必要な GitHub Secrets: `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`  
-Variables: `ACR_NAME`, `WEBAPP_NAME`, `AZURE_RESOURCE_GROUP`
+Variables: `AZURE_RESOURCE_GROUP`, `CONTAINER_APP_NAME`
 
-App Settings（ポータルまたは Bicep）: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`
+Container Apps シークレット: `DB_URL`, `DB_USER`, `DB_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`（Bicep でも投入可）
+
+App Service・ACR・デプロイスロットは使わない。
 
 ## Azure 初期構築
 
@@ -61,9 +62,7 @@ az deployment group create -g <rg> -f infra/main.bicep \
      jwtRefreshSecret=<32bytes+>
 ```
 
-SKU は Standard S1（スロットとオートスケールのため）。SQL は Azure SQL Basic。ファイアウォールは App Service 向け `AllowAllWindowsAzureIps`（本フェーズ。プライベートエンドポイントは後続）。JWT はステートレスなのでインスタンス増減にセッションストアは不要です。
-
-ACR の AcrPull を Web App / staging スロットのマネージド ID に付与してください。
+SQL は Basic（無料オファーがある契約なら作成後に差し替え可）。Container Apps は Consumption、最小 0 / 最大 1。ファイアウォールは Azure サービス許可。初回イメージ更新は `cd.yml` が GHCR のタグを載せる。
 
 ## 環境変数（サーバ）
 

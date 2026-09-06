@@ -41,7 +41,7 @@
 
 ## Docker
 - ローカル開発は Docker Compose で SQL Server と API を起動できること
-- API はコンテナでビルド・実行できること（本番 App Service へ同じイメージを載せる前提）
+- API はコンテナでビルド・実行できること（本番 Container Apps へ同じイメージを載せる前提）
 - 秘密（DB パスワード、JWT 鍵）は環境変数。リポジトリに平文で置かない
 - 開発起動順: SQL Server → マイグレーション → API → Flutter（`API_BASE_URL` を開発ホストへ）
 
@@ -62,19 +62,18 @@
 ## CI/CD（GitHub Actions）
 - `code/server`: ビルド、JUnit、（可能な範囲で）Testcontainers 結合
 - `code/front`: `flutter test`（および CI で実行可能な integration_test）
-- 成功時: サーバ Docker イメージをビルドし、Azure App Service へデプロイ
-- スロット: **staging にデプロイ → 検証後に production へスワップ**
-- 秘密は GitHub Secrets / App Service 設定。成果物にトークン・接続文字列を埋め込まない
+- 成功時: サーバ Docker イメージを GitHub Container Registry へ push し、Azure Container Apps のイメージを更新する
+- スロット・ACR・App Service Plan は使わない
+- 秘密は GitHub Secrets / Container Apps シークレット。成果物にトークン・接続文字列を埋め込まない
 - フロントのストア提出は本フェーズ必須としない。CI では APK（または相当）のビルドまででよい
 
-## サーバ配備（Azure App Service）
-- **App Service Plan**（Linux、コンテナ）に API を載せる
-- **デプロイスロット**（少なくとも production / staging）で無停止に近い入替ができること
-- **自動スケール**（CPU またはリクエストに基づくインスタンス増減）を Plan で有効にする
-- JWT はステートレス。スケールアウトしてもセッションストアは導入しない（設計どおり）
+## サーバ配備（Azure Container Apps）
+- **Azure Container Apps Consumption**。最小レプリカ 0、最大 1
+- JWT はステートレス。セッションストアは導入しない
 - 同一 `gameId` の更新直列は DB 行ロックと `version` 楽観排他で担保する（分散ロックは導入しない）
-- DB は Azure SQL Database（または同等の SQL Server）。接続は SSL、設定は App Settings
-- 本番相当は HTTPS 終端。健康確認用の軽量エンドポイントを用意し、スロット検証とスケール判定に使えるようにする
+- DB は Azure SQL Database（無料オファーがあればそれ、なければ Basic）。接続は SSL
+- 本番相当は HTTPS 終端（イングレス）。健康確認は `GET /api/v1/health`
+- 契約の詳細は `infra/azure-container-apps-契約.txt`
 
 # 実装時の注意
 - API 名・JSON・エラー `code`・画面 ID（SC-*）を設計書から勝手に変えない
@@ -82,13 +81,13 @@
 - クライアントは配札内容を指定できない
 - パスワードは BCrypt。リフレッシュトークンはハッシュ保存
 - ログにパスワード・Authorization・refresh 生値・盤面全文を出さない
-- 設計の「本フェーズは単一インスタンス」はセッションストア不要の意味。App Service の複数インスタンスは上記のとおり許容する
+- 設計の「最大 1 レプリカ」はセッションストア不要の意味。スケールゼロ（0 台）は許容する
 
 # 完了条件
 業務要件 12 章およびシステム要件 9 章を満たすこと。加えて:
 
 1. `docker compose` で SQL Server + API が起動し、マイグレーション済みになる
 2. サーバ JUnit / フロント flutter_test が CI で緑
-3. GitHub Actions から staging スロットへデプロイできる
-4. App Service Plan でスロット運用と自動スケールが設定されている
+3. GitHub Actions から Container Apps のイメージを更新できる
+4. 最小レプリカ 0・最大 1 の Consumption で、Azure SQL に接続できる
 5. ログイン利用者が Klondike Draw 1 をプレイし、保存・再開・クリア結果がサーバ正本と一致する

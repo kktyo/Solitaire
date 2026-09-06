@@ -1,6 +1,7 @@
-@description('Klondike API on App Service Linux containers with staging slot and autoscale')
+@description('Klondike API: Azure SQL + Container Apps Consumption (no App Service, no ACR, no slots)')
 param location string = resourceGroup().location
 param prefix string = 'solitaire'
+param sqlServerName string = 'kktyo-slt-sql01'
 param sqlAdminLogin string
 @secure()
 param sqlAdminPassword string
@@ -8,23 +9,11 @@ param sqlAdminPassword string
 param jwtAccessSecret string
 @secure()
 param jwtRefreshSecret string
+param containerImage string = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
 
-var planName = '${prefix}-plan'
-var webName = '${prefix}-api'
-var sqlServerName = '${prefix}-sql-${uniqueString(resourceGroup().id)}'
 var sqlDbName = 'solitaire'
-var acrName = replace('${prefix}acr${uniqueString(resourceGroup().id)}', '-', '')
-
-resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' = {
-  name: acrName
-  location: location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    adminUserEnabled: false
-  }
-}
+var envName = '${prefix}-cae'
+var appName = '${prefix}-api'
 
 resource sql 'Microsoft.Sql/servers@2023-08-01-preview' = {
   name: sqlServerName
@@ -55,126 +44,87 @@ resource db 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
   }
 }
 
-resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: planName
+resource env 'Microsoft.App/managedEnvironments@2024-03-01' = {
+  name: envName
   location: location
-  sku: {
-    name: 'S1'
-    tier: 'Standard'
-    capacity: 1
-  }
-  kind: 'linux'
   properties: {
-    reserved: true
-  }
-}
-
-resource web 'Microsoft.Web/sites@2023-12-01' = {
-  name: webName
-  location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    serverFarmId: plan.id
-    httpsOnly: true
-    siteConfig: {
-      linuxFxVersion: 'DOCKER|mcr.microsoft.com/appsvc/staticsite:latest'
-      healthCheckPath: '/api/v1/health'
-      acrUseManagedIdentityCreds: true
-      appSettings: [
-        { name: 'WEBSITES_PORT', value: '8080' }
-        { name: 'DB_URL', value: 'jdbc:sqlserver://${sql.name}.database.windows.net:1433;databaseName=${sqlDbName};encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net' }
-        { name: 'DB_USER', value: sqlAdminLogin }
-        { name: 'DB_PASSWORD', value: sqlAdminPassword }
-        { name: 'JWT_ACCESS_SECRET', value: jwtAccessSecret }
-        { name: 'JWT_REFRESH_SECRET', value: jwtRefreshSecret }
-      ]
+    zoneRedundant: false
+    appLogsConfiguration: {
+      destination: 'none'
     }
   }
 }
 
-resource staging 'Microsoft.Web/sites/slots@2023-12-01' = {
-  parent: web
-  name: 'staging'
+resource app 'Microsoft.App/containerApps@2024-03-01' = {
+  name: appName
   location: location
-  identity: {
-    type: 'SystemAssigned'
-  }
   properties: {
-    httpsOnly: true
-    siteConfig: {
-      healthCheckPath: '/api/v1/health'
-      acrUseManagedIdentityCreds: true
-      appSettings: [
-        { name: 'WEBSITES_PORT', value: '8080' }
-        { name: 'DB_URL', value: 'jdbc:sqlserver://${sql.name}.database.windows.net:1433;databaseName=${sqlDbName};encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net' }
-        { name: 'DB_USER', value: sqlAdminLogin }
-        { name: 'DB_PASSWORD', value: sqlAdminPassword }
-        { name: 'JWT_ACCESS_SECRET', value: jwtAccessSecret }
-        { name: 'JWT_REFRESH_SECRET', value: jwtRefreshSecret }
+    managedEnvironmentId: env.id
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 8080
+        transport: 'http'
+        allowInsecure: false
+      }
+      secrets: [
+        { name: 'db-password', value: sqlAdminPassword }
+        { name: 'jwt-access', value: jwtAccessSecret }
+        { name: 'jwt-refresh', value: jwtRefreshSecret }
       ]
     }
-  }
-}
-
-resource autoscale 'Microsoft.Insights/autoscalesettings@2022-10-01' = {
-  name: '${planName}-autoscale'
-  location: location
-  properties: {
-    enabled: true
-    targetResourceUri: plan.id
-    profiles: [
-      {
-        name: 'cpu'
-        capacity: {
-          minimum: '1'
-          maximum: '3'
-          default: '1'
+    template: {
+      containers: [
+        {
+          name: 'api'
+          image: containerImage
+          env: [
+            { name: 'PORT', value: '8080' }
+            {
+              name: 'DB_URL'
+              value: 'jdbc:sqlserver://${sql.name}.database.windows.net:1433;databaseName=${sqlDbName};encrypt=true;trustServerCertificate=false;hostNameInCertificate=*.database.windows.net'
+            }
+            { name: 'DB_USER', value: sqlAdminLogin }
+            { name: 'DB_PASSWORD', secretRef: 'db-password' }
+            { name: 'JWT_ACCESS_SECRET', secretRef: 'jwt-access' }
+            { name: 'JWT_REFRESH_SECRET', secretRef: 'jwt-refresh' }
+          ]
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          probes: [
+            {
+              type: 'Startup'
+              httpGet: {
+                path: '/api/v1/health'
+                port: 8080
+              }
+              periodSeconds: 10
+              failureThreshold: 30
+            }
+          ]
         }
+      ]
+      scale: {
+        minReplicas: 0
+        maxReplicas: 1
         rules: [
           {
-            metricTrigger: {
-              metricName: 'CpuPercentage'
-              metricResourceUri: plan.id
-              timeGrain: 'PT1M'
-              statistic: 'Average'
-              timeWindow: 'PT5M'
-              timeAggregation: 'Average'
-              operator: 'GreaterThan'
-              threshold: 70
-            }
-            scaleAction: {
-              direction: 'Increase'
-              type: 'ChangeCount'
-              value: '1'
-              cooldown: 'PT5M'
-            }
-          }
-          {
-            metricTrigger: {
-              metricName: 'CpuPercentage'
-              metricResourceUri: plan.id
-              timeGrain: 'PT1M'
-              statistic: 'Average'
-              timeWindow: 'PT10M'
-              timeAggregation: 'Average'
-              operator: 'LessThan'
-              threshold: 30
-            }
-            scaleAction: {
-              direction: 'Decrease'
-              type: 'ChangeCount'
-              value: '1'
-              cooldown: 'PT10M'
+            name: 'http'
+            http: {
+              metadata: {
+                concurrentRequests: '20'
+              }
             }
           }
         ]
       }
-    ]
+    }
   }
 }
 
-output webAppName string = web.name
-output acrName string = acr.name
 output sqlFqdn string = sql.properties.fullyQualifiedDomainName
+output containerAppName string = app.name
+output containerAppFqdn string = app.properties.configuration.ingress.fqdn
