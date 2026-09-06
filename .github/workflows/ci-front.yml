@@ -25,7 +25,9 @@ jobs:
         run: |
           flutter pub get
           flutter test
+      - name: Ensure Android platform
+        working-directory: code/front
+        run: flutter create . --project-name solitaire --org com.solitaire --platforms=android
       - name: APK (unsigned)
         working-directory: code/front
         run: flutter build apk --debug --dart-define=API_BASE_URL=http://127.0.0.1:8080
-        continue-on-error: true
