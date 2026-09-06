@@ -64,23 +64,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            Semantics(
-              identifier: 'email',
-              textField: true,
-              child: TextField(
-                controller: email,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(labelText: 'メール'),
-              ),
+            TextField(
+              controller: email,
+              keyboardType: TextInputType.emailAddress,
+              decoration: const InputDecoration(labelText: 'メール'),
             ),
-            Semantics(
-              identifier: 'password',
-              textField: true,
-              child: TextField(
-                controller: password,
-                obscureText: true,
-                decoration: const InputDecoration(labelText: 'パスワード'),
-              ),
+            TextField(
+              controller: password,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'パスワード'),
             ),
             if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: Colors.red))),
             const SizedBox(height: 16),

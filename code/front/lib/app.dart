@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,9 +9,19 @@ import 'boot/boot_page.dart';
 import 'game/presentation/game_page.dart';
 import 'home/home_page.dart';
 
+String _startLocation() {
+  if (kIsWeb) {
+    final path = Uri.base.path;
+    if (path.isNotEmpty && path != '/') {
+      return path;
+    }
+  }
+  return '/boot';
+}
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
-    initialLocation: '/boot',
+    initialLocation: _startLocation(),
     routes: [
       GoRoute(path: '/boot', builder: (c, s) => const BootPage()),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),
