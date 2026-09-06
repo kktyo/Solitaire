@@ -90,7 +90,12 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             ),
             if (error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(error!, style: const TextStyle(color: Colors.red))),
             const SizedBox(height: 16),
-            FilledButton(onPressed: busy ? null : _submit, child: const Text('登録')),
+            Semantics(
+              identifier: 'register-submit',
+              button: true,
+              label: '登録',
+              child: FilledButton(onPressed: busy ? null : _submit, child: const Text('登録')),
+            ),
             TextButton(onPressed: () => context.go('/login'), child: const Text('ログインへ')),
           ],
         ),
