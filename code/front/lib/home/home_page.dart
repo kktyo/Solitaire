@@ -103,7 +103,12 @@ class _HomePageState extends ConsumerState<HomePage> {
             if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
             FilledButton(onPressed: current == null ? null : _continue, child: const Text('続きから')),
             const SizedBox(height: 12),
-            FilledButton(onPressed: _newGame, child: const Text('新しいゲーム')),
+            Semantics(
+              identifier: 'new-game',
+              button: true,
+              label: '新しいゲーム',
+              child: FilledButton(onPressed: _newGame, child: const Text('新しいゲーム')),
+            ),
             const SizedBox(height: 24),
             if (latest != null)
               Text(

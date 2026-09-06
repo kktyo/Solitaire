@@ -49,6 +49,8 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       if (mounted) context.go('/home');
     } on ApiException catch (e) {
       setState(() => error = e.message);
+    } catch (_) {
+      setState(() => error = '通信に失敗しました。');
     } finally {
       if (mounted) setState(() => busy = false);
     }
