@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../api/client.dart';
 import '../api/models.dart';
 import '../game/application/session.dart';
+import '../widgets/blocking_loader.dart';
 
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
@@ -17,6 +18,8 @@ class _HomePageState extends ConsumerState<HomePage> {
   GameDto? current;
   ResultSummary? latest;
   String? error;
+  bool loading = true;
+  bool busy = false;
 
   @override
   void initState() {
@@ -26,16 +29,25 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _load() async {
     final api = ref.read(apiClientProvider);
+    setState(() {
+      loading = true;
+      error = null;
+    });
     try {
       final g = await api.currentGame();
       final r = await api.latestResult();
+      if (!mounted) return;
       setState(() {
         current = g;
         latest = r;
-        error = null;
+        loading = false;
       });
     } on ApiException catch (e) {
-      setState(() => error = e.message);
+      if (!mounted) return;
+      setState(() {
+        error = e.message;
+        loading = false;
+      });
     }
   }
 
@@ -52,10 +64,15 @@ class _HomePageState extends ConsumerState<HomePage> {
 
   Future<void> _continue() async {
     if (current == null) return;
-    final api = ref.read(apiClientProvider);
-    final g = await api.resume(current!.gameId);
-    ref.read(gameSessionProvider.notifier).load(g);
-    if (mounted) context.go('/game');
+    setState(() => busy = true);
+    try {
+      final api = ref.read(apiClientProvider);
+      final g = await api.resume(current!.gameId);
+      ref.read(gameSessionProvider.notifier).load(g);
+      if (mounted) context.go('/game');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   Future<void> _newGame() async {
@@ -74,9 +91,14 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
       if (ok != true) return;
     }
-    final g = await api.createGame(abandonExisting: current != null);
-    ref.read(gameSessionProvider.notifier).load(g);
-    if (mounted) context.go('/game');
+    setState(() => busy = true);
+    try {
+      final g = await api.createGame(abandonExisting: current != null);
+      ref.read(gameSessionProvider.notifier).load(g);
+      if (mounted) context.go('/game');
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
   }
 
   @override
@@ -86,30 +108,39 @@ class _HomePageState extends ConsumerState<HomePage> {
         title: const Text('ソリティア'),
         actions: [
           TextButton(
-            onPressed: () async {
-              await ref.read(apiClientProvider).logout();
-              ref.read(authLoggedInProvider.notifier).state = false;
-              if (context.mounted) context.go('/login');
-            },
+            onPressed: (loading || busy)
+                ? null
+                : () async {
+                    await ref.read(apiClientProvider).logout();
+                    ref.read(authLoggedInProvider.notifier).state = false;
+                    ref.read(gameSessionProvider.notifier).clear();
+                    if (context.mounted) context.go('/login');
+                  },
             child: const Text('ログアウト'),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
-            FilledButton(onPressed: current == null ? null : _continue, child: const Text('続きから')),
-            const SizedBox(height: 12),
-            FilledButton(onPressed: _newGame, child: const Text('新しいゲーム')),
-            const SizedBox(height: 24),
-            if (latest != null)
-              Text(
-                '直近クリア: ${_fmt(latest!.elapsedMs)} / ${latest!.moveCount}手\n${latest!.clearedAt.toLocal()}',
+      body: BlockingLoader(
+        visible: loading || busy,
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
+              FilledButton(
+                onPressed: loading || busy || current == null ? null : _continue,
+                child: const Text('続きから'),
               ),
-          ],
+              const SizedBox(height: 12),
+              FilledButton(onPressed: loading || busy ? null : _newGame, child: const Text('新しいゲーム')),
+              const SizedBox(height: 24),
+              if (latest != null)
+                Text(
+                  '直近クリア: ${_fmt(latest!.elapsedMs)} / ${latest!.moveCount}手\n${latest!.clearedAt.toLocal()}',
+                ),
+            ],
+          ),
         ),
       ),
     );

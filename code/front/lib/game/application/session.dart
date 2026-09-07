@@ -67,6 +67,10 @@ class GameSessionController extends Notifier<GameSession?> {
     Future.microtask(_autoComplete);
   }
 
+  void clear() {
+    state = null;
+  }
+
   Future<void> play(Move move) async {
     if (state?.busy == true) {
       return;

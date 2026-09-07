@@ -382,3 +382,20 @@ class BoardLayout {
     return (room / (count - 1)).clamp(minPeek, preferredPeek);
   }
 }
+
+/// ドロップ成功時、連なり先頭が着地するグローバル左上。
+Offset dropLanding({
+  required Offset slotTopLeft,
+  required Location dest,
+  required Board board,
+  required BoardLayout layout,
+  required int incomingCount,
+}) {
+  const inset = 2.0;
+  if (dest.pile == Pile.tableau) {
+    final n = dest.index >= 0 && dest.index < board.tableau.length ? board.tableau[dest.index].length : 0;
+    final peek = layout.peekFor(n + incomingCount);
+    return slotTopLeft + Offset(inset, n * peek);
+  }
+  return slotTopLeft + const Offset(inset, 0);
+}

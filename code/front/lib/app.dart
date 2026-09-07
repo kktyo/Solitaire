@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'auth/login_page.dart';
 import 'auth/register_page.dart';
 import 'boot/boot_page.dart';
+import 'game/application/session.dart';
 import 'game/presentation/game_page.dart';
 import 'home/home_page.dart';
 
@@ -20,8 +21,19 @@ String _startLocation() {
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final refresh = ValueNotifier<int>(0);
+  ref.onDispose(refresh.dispose);
+  ref.listen(authLoggedInProvider, (_, __) => refresh.value++);
+  ref.listen(gameSessionProvider, (_, __) => refresh.value++);
   return GoRouter(
     initialLocation: _startLocation(),
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      if (state.matchedLocation == '/game' && ref.read(gameSessionProvider) == null) {
+        return '/boot';
+      }
+      return null;
+    },
     routes: [
       GoRoute(path: '/boot', builder: (c, s) => const BootPage()),
       GoRoute(path: '/login', builder: (c, s) => const LoginPage()),

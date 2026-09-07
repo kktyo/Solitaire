@@ -63,6 +63,32 @@ void main() {
     expect(Rules.isStalemate(ace), isFalse);
   });
 
+  test('stalemate is false when waste or foundation can still move', () {
+    final tableau = List.generate(7, (_) => <Card>[]);
+    tableau[0] = [Card('3C', true)];
+    final emptyF = List.generate(4, (_) => <Card>[]);
+    final wastePlayable = Board(
+      tableau: tableau,
+      foundations: emptyF,
+      stock: [],
+      waste: [Card('2H', true)],
+    );
+    expect(Rules.isStalemate(wastePlayable), isFalse);
+
+    final foundationPlayable = Board(
+      tableau: tableau,
+      foundations: [
+        [Card('AH', true), Card('2H', true)],
+        [],
+        [],
+        [],
+      ],
+      stock: [],
+      waste: [],
+    );
+    expect(Rules.isStalemate(foundationPlayable), isFalse);
+  });
+
   test('nextAutoMove prefers foundation then draw', () {
     final empty = List.generate(7, (_) => <Card>[]);
     empty[0] = [Card('AH', true)];

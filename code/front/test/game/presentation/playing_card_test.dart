@@ -15,6 +15,27 @@ void main() {
     expect(layout.cardHeight + 12 * layout.minPeek, lessThanOrEqualTo(layout.tableauHeight + 1));
   });
 
+  test('drop landing sits on tableau top not column origin', () {
+    final layout = BoardLayout.of(viewport: const Size(390, 700), maxTableauCount: 5);
+    final tableau = List.generate(7, (_) => <Card>[]);
+    tableau[1] = [Card('KC', true), Card('QH', true)];
+    final board = Board(
+      tableau: tableau,
+      foundations: List.generate(4, (_) => <Card>[]),
+      stock: [],
+      waste: [],
+    );
+    final at = dropLanding(
+      slotTopLeft: Offset.zero,
+      dest: Location(Pile.tableau, 1),
+      board: board,
+      layout: layout,
+      incomingCount: 1,
+    );
+    expect(at.dx, 2);
+    expect(at.dy, closeTo(2 * layout.peekFor(3), 0.01));
+  });
+
   testWidgets('face card shows corner rank and suit', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

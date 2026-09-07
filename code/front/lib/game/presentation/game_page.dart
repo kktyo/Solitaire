@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../application/session.dart';
 import '../domain/rules.dart';
+import '../../widgets/blocking_loader.dart';
 import 'playing_card.dart';
 
 class GamePage extends ConsumerStatefulWidget {
@@ -18,6 +19,9 @@ class GamePage extends ConsumerStatefulWidget {
 class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver, TickerProviderStateMixin {
   Timer? _tick;
   int? _stalemateShownVersion;
+  String? _clearedShownGameId;
+  String? _errorShown;
+  bool _pageBusy = false;
   int? _dragCol;
   int? _dragIndex;
   Location? _dragFrom;
@@ -25,6 +29,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
   Offset _grabLocal = Offset.zero;
   Offset _originGlobal = Offset.zero;
   double _cardWidth = 40;
+  BoardLayout? _tableLayout;
   final _tabKeys = List.generate(7, (_) => GlobalKey());
   final _foundKeys = List.generate(4, (_) => GlobalKey());
 
@@ -87,8 +92,13 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
       ),
     );
     if (ok != true) return;
-    final g = await ref.read(apiClientProvider).createGame(abandonExisting: true);
-    ref.read(gameSessionProvider.notifier).load(g);
+    setState(() => _pageBusy = true);
+    try {
+      final g = await ref.read(apiClientProvider).createGame(abandonExisting: true);
+      ref.read(gameSessionProvider.notifier).load(g);
+    } finally {
+      if (mounted) setState(() => _pageBusy = false);
+    }
   }
 
   Future<void> _home() async {
@@ -103,10 +113,14 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
   Widget build(BuildContext context) {
     final session = ref.watch(gameSessionProvider);
     if (session == null) {
-      return const Scaffold(body: Center(child: Text('対局がありません')));
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (session.server.status == 'CLEARED' && mounted) {
+      if (!mounted || session.busy || _animating || _pageBusy) {
+        return;
+      }
+      if (session.server.status == 'CLEARED' && session.server.gameId != _clearedShownGameId) {
+        _clearedShownGameId = session.server.gameId;
         showDialog<void>(
           context: context,
           barrierDismissible: false,
@@ -124,8 +138,14 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
               FilledButton(
                 onPressed: () async {
                   Navigator.pop(c);
-                  final g = await ref.read(apiClientProvider).createGame(abandonExisting: false);
-                  ref.read(gameSessionProvider.notifier).load(g);
+                  setState(() => _pageBusy = true);
+                  try {
+                    final g = await ref.read(apiClientProvider).createGame(abandonExisting: false);
+                    _clearedShownGameId = null;
+                    ref.read(gameSessionProvider.notifier).load(g);
+                  } finally {
+                    if (mounted) setState(() => _pageBusy = false);
+                  }
                 },
                 child: const Text('もう一度'),
               ),
@@ -134,8 +154,8 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
         );
       } else if (session.server.status == 'IN_PROGRESS' &&
           session.server.stalemate &&
-          session.server.version != _stalemateShownVersion &&
-          mounted) {
+          Rules.isStalemate(session.displayBoard) &&
+          session.server.version != _stalemateShownVersion) {
         _stalemateShownVersion = session.server.version;
         showDialog<void>(
           context: context,
@@ -163,7 +183,8 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
           ),
         );
       }
-      if (session.error != null) {
+      if (session.error != null && session.error != _errorShown) {
+        _errorShown = session.error;
         showDialog<void>(
           context: context,
           builder: (c) => AlertDialog(
@@ -173,8 +194,18 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
               TextButton(
                 onPressed: () async {
                   Navigator.pop(c);
-                  final g = await ref.read(apiClientProvider).currentGame();
-                  if (g != null) ref.read(gameSessionProvider.notifier).load(g);
+                  setState(() => _pageBusy = true);
+                  try {
+                    final g = await ref.read(apiClientProvider).currentGame();
+                    _errorShown = null;
+                    if (g != null) {
+                      ref.read(gameSessionProvider.notifier).load(g);
+                    } else {
+                      if (mounted) context.go('/home');
+                    }
+                  } finally {
+                    if (mounted) setState(() => _pageBusy = false);
+                  }
                 },
                 child: const Text('再試行'),
               ),
@@ -199,18 +230,20 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
         backgroundColor: const Color(0xFF083615),
         foregroundColor: Colors.white,
         title: Text('${_clock(session)}  ${session.server.moveCount}手'),
-        leading: IconButton(onPressed: session.busy ? null : _home, icon: const Icon(Icons.home)),
+        leading: IconButton(onPressed: session.busy || _pageBusy ? null : _home, icon: const Icon(Icons.home)),
         actions: [
           IconButton(
-            onPressed: session.busy || !session.server.canUndo
+            onPressed: session.busy || _pageBusy || !session.server.canUndo
                 ? null
                 : () => ref.read(gameSessionProvider.notifier).undo(),
             icon: const Icon(Icons.undo),
           ),
-          IconButton(onPressed: session.busy ? null : _restart, icon: const Icon(Icons.refresh)),
+          IconButton(onPressed: session.busy || _pageBusy ? null : _restart, icon: const Icon(Icons.refresh)),
         ],
       ),
-      body: Column(
+      body: BlockingLoader(
+        visible: !_animating && (session.busy || _pageBusy),
+        child: Column(
         children: [
           if (session.toast != null)
             MaterialBanner(
@@ -245,13 +278,19 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
                                   slotKey: _foundKeys[i],
                                 ),
                               const Spacer(),
-                              GestureDetector(
-                                onTap: () => ref.read(gameSessionProvider.notifier).tapStock(),
-                                child: PlayingCardView(
-                                  width: layout.cardWidth,
-                                  height: layout.cardHeight,
-                                  empty: board.stock.isEmpty,
-                                  facedown: board.stock.isNotEmpty,
+                              SizedBox(
+                                width: layout.cardWidth,
+                                height: layout.cardHeight,
+                                child: GestureDetector(
+                                  onTap: session.busy || _pageBusy
+                                      ? null
+                                      : () => ref.read(gameSessionProvider.notifier).tapStock(),
+                                  child: PlayingCardView(
+                                    width: layout.cardWidth,
+                                    height: layout.cardHeight,
+                                    empty: board.stock.isEmpty,
+                                    facedown: board.stock.isNotEmpty,
+                                  ),
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -270,6 +309,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
                                 preferredPeek: layout.preferredPeek,
                                 tableauHeight: table.maxHeight,
                               );
+                              _tableLayout = tableLayout;
                               return Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -293,6 +333,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
             ),
           ),
         ],
+        ),
       ),
     );
   }
@@ -407,7 +448,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
     return _returnDraggable(
       data: data,
       feedback: feedback,
-      childWhenDragging: const SizedBox.shrink(),
+      childWhenDragging: SizedBox(width: layout.cardWidth, height: layout.cardHeight),
       child: hiding ? Opacity(opacity: 0, child: face) : face,
       onStart: () => setState(() {
         _dragCol = col;
@@ -466,7 +507,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
       face = _returnDraggable(
         data: data,
         feedback: feedback,
-        childWhenDragging: const SizedBox.shrink(),
+        childWhenDragging: SizedBox(width: layout.cardWidth, height: layout.cardHeight),
         child: _hidingPile(loc) ? Opacity(opacity: 0, child: face) : face,
         onStart: () => setState(() => _dragFrom = loc),
       );
@@ -485,8 +526,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
   bool _hidingTableau(int col, int i) =>
       _dragCol == col && _dragIndex != null && i >= _dragIndex!;
 
-  bool _hidingPile(Location loc) =>
-      _animating && _dragFrom != null && _sameLoc(_dragFrom!, loc);
+  bool _hidingPile(Location loc) => _dragFrom != null && _sameLoc(_dragFrom!, loc);
 
   Widget _returnDraggable({
     required Move data,
@@ -499,6 +539,10 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
       builder: (ctx) {
         return Listener(
           onPointerDown: (e) {
+            final box = ctx.findRenderObject() as RenderBox?;
+            if (box != null && box.hasSize) {
+              _originGlobal = box.localToGlobal(Offset.zero);
+            }
             _grabLocal = e.localPosition;
           },
           child: Draggable<Move>(
@@ -506,6 +550,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
             feedback: feedback,
             childWhenDragging: childWhenDragging,
             maxSimultaneousDrags: 1,
+            dragAnchorStrategy: childDragAnchorStrategy,
             onDragStarted: () {
               final box = ctx.findRenderObject() as RenderBox?;
               if (box != null && box.hasSize) {
@@ -519,8 +564,10 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
                 return;
               }
               setState(() => _animating = true);
-              final dest = _hitTarget(details.offset, data, board);
-              _finishDrag(details.offset, data, feedback, dest);
+              final cardTl = details.offset;
+              final pointer = cardTl + _grabLocal;
+              final dest = _hitTarget(pointer, data, board);
+              _finishDrag(cardTl, data, feedback, dest);
             },
             child: child,
           ),
@@ -529,21 +576,34 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
     );
   }
 
-  Future<void> _finishDrag(Offset pointer, Move data, Widget feedback, Location? dest) async {
-    final start = pointer - _grabLocal;
-    final originTl = _originGlobal == Offset.zero ? start : _originGlobal;
-    if (!_animating && mounted) {
-      setState(() => _animating = true);
+  Offset? _landing(Location dest, Board board, int incomingCount) {
+    final slot = _slotTopLeft(dest);
+    final layout = _tableLayout;
+    if (slot == null || layout == null) {
+      return slot;
     }
+    return dropLanding(
+      slotTopLeft: slot,
+      dest: dest,
+      board: board,
+      layout: layout,
+      incomingCount: incomingCount,
+    );
+  }
+
+  Future<void> _finishDrag(Offset cardTl, Move data, Widget feedback, Location? dest) async {
+    final originTl = _originGlobal == Offset.zero ? cardTl : _originGlobal;
     try {
       if (dest != null) {
-        final destTl = _slotTopLeft(dest) ?? start;
-        await _fly(start, destTl, feedback);
+        final board = ref.read(gameSessionProvider)!.displayBoard;
+        final destTl = _landing(dest, board, data.count) ?? cardTl;
+        await _fly(cardTl, destTl, feedback);
         if (mounted) {
+          setState(() => _animating = false);
           await ref.read(gameSessionProvider.notifier).play(Move.relocate(data.from!, dest, data.count));
         }
       } else {
-        await _fly(start, originTl, feedback);
+        await _fly(cardTl, originTl, feedback);
       }
     } finally {
       if (mounted) {

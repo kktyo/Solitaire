@@ -100,6 +100,31 @@ class RulesEngineTest {
     }
 
     @Test
+    void stalemateFalseWhenWasteOrFoundationPlayable() {
+        List<List<Card>> tableau = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            tableau.add(new ArrayList<>());
+        }
+        tableau.get(0).add(new Card("3C", true));
+        Map<Suit, List<Card>> emptyF = new EnumMap<>(Suit.class);
+        for (Suit s : Suit.values()) {
+            emptyF.put(s, new ArrayList<>());
+        }
+        Board wastePlayable = new Board(tableau, emptyF, List.of(), List.of(new Card("2H", true)));
+        assertFalse(Rules.isStalemate(wastePlayable));
+
+        Map<Suit, List<Card>> f = new EnumMap<>(Suit.class);
+        f.put(Suit.H, List.of(new Card("AH", true), new Card("2H", true)));
+        for (Suit s : Suit.values()) {
+            if (s != Suit.H) {
+                f.put(s, new ArrayList<>());
+            }
+        }
+        Board foundationPlayable = new Board(tableau, f, List.of(), List.of());
+        assertFalse(Rules.isStalemate(foundationPlayable));
+    }
+
+    @Test
     void clearedIsNotStalemate() {
         List<List<Card>> tableau = new ArrayList<>();
         for (int i = 0; i < 7; i++) {
