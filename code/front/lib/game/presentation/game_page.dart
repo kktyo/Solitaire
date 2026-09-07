@@ -18,6 +18,8 @@ class GamePage extends ConsumerStatefulWidget {
 
 class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver, TickerProviderStateMixin {
   Timer? _tick;
+  Timer? _hintTimer;
+  Move? _hintMove;
   int? _stalemateShownVersion;
   String? _clearedShownGameId;
   String? _errorShown;
@@ -45,6 +47,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
   @override
   void dispose() {
     _tick?.cancel();
+    _hintTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -99,6 +102,56 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
     } finally {
       if (mounted) setState(() => _pageBusy = false);
     }
+  }
+
+  void _clearHint() {
+    _hintTimer?.cancel();
+    _hintMove = null;
+  }
+
+  void _onHint(GameSession session) {
+    if (session.busy || _pageBusy || _animating || session.server.status != 'IN_PROGRESS') {
+      return;
+    }
+    if (session.server.stalemate && Rules.isStalemate(session.displayBoard)) {
+      return;
+    }
+    final m = Rules.hint(session.displayBoard);
+    if (m == null) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('置ける手がありません。')));
+      return;
+    }
+    _hintTimer?.cancel();
+    setState(() => _hintMove = m);
+    _hintTimer = Timer(const Duration(seconds: 3), () {
+      if (mounted) setState(() => _hintMove = null);
+    });
+  }
+
+  bool _hintStock() {
+    final m = _hintMove;
+    return m != null && (m.type == MoveType.draw || m.type == MoveType.recycle);
+  }
+
+  bool _hintFrom(Location loc) {
+    final m = _hintMove;
+    return m != null && m.type == MoveType.move && m.from != null && _sameLoc(m.from!, loc);
+  }
+
+  bool _hintTo(Location loc) {
+    final m = _hintMove;
+    return m != null && m.type == MoveType.move && m.to != null && _sameLoc(m.to!, loc);
+  }
+
+  bool _hintTableauFrom(int col, int i, Board board) {
+    final m = _hintMove;
+    if (m == null || m.type != MoveType.move || m.from == null) {
+      return false;
+    }
+    if (m.from!.pile != Pile.tableau || m.from!.index != col) {
+      return false;
+    }
+    return i == board.tableau[col].length - m.count;
   }
 
   Future<void> _home() async {
@@ -233,16 +286,30 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
         leading: IconButton(onPressed: session.busy || _pageBusy ? null : _home, icon: const Icon(Icons.home)),
         actions: [
           IconButton(
+            onPressed: session.busy ||
+                    _pageBusy ||
+                    _animating ||
+                    session.server.status != 'IN_PROGRESS' ||
+                    (session.server.stalemate && Rules.isStalemate(session.displayBoard))
+                ? null
+                : () => _onHint(session),
+            icon: const Icon(Icons.lightbulb_outline),
+            tooltip: 'ヒント',
+          ),
+          IconButton(
             onPressed: session.busy || _pageBusy || !session.server.canUndo
                 ? null
-                : () => ref.read(gameSessionProvider.notifier).undo(),
+                : () {
+                    _clearHint();
+                    ref.read(gameSessionProvider.notifier).undo();
+                  },
             icon: const Icon(Icons.undo),
           ),
           IconButton(onPressed: session.busy || _pageBusy ? null : _restart, icon: const Icon(Icons.refresh)),
         ],
       ),
       body: BlockingLoader(
-        visible: !_animating && (session.busy || _pageBusy),
+        visible: _pageBusy,
         child: Column(
         children: [
           if (session.toast != null)
@@ -284,12 +351,17 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
                                 child: GestureDetector(
                                   onTap: session.busy || _pageBusy
                                       ? null
-                                      : () => ref.read(gameSessionProvider.notifier).tapStock(),
+                                      : () {
+                                          _clearHint();
+                                          setState(() {});
+                                          ref.read(gameSessionProvider.notifier).tapStock();
+                                        },
                                   child: PlayingCardView(
                                     width: layout.cardWidth,
                                     height: layout.cardHeight,
                                     empty: board.stock.isEmpty,
                                     facedown: board.stock.isNotEmpty,
+                                    highlight: _hintStock(),
                                   ),
                                 ),
                               ),
@@ -317,7 +389,15 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
                                     Expanded(
                                       child: KeyedSubtree(
                                         key: _tabKeys[col],
-                                        child: _tableauColumn(col, board.tableau[col], tableLayout, session),
+                                        child: DecoratedBox(
+                                          decoration: _hintTo(Location(Pile.tableau, col))
+                                              ? BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(6),
+                                                  border: Border.all(color: Colors.amber, width: 2.5),
+                                                )
+                                              : const BoxDecoration(),
+                                          child: _tableauColumn(col, board.tableau[col], tableLayout, session),
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -438,6 +518,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
       width: layout.cardWidth,
       height: layout.cardHeight,
       card: card,
+      highlight: _hintTableauFrom(col, i, live),
     );
     if (!card.faceUp || movable == 0 || session.busy || _animating) {
       return hiding ? Opacity(opacity: 0, child: face) : face;
@@ -451,6 +532,7 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
       childWhenDragging: SizedBox(width: layout.cardWidth, height: layout.cardHeight),
       child: hiding ? Opacity(opacity: 0, child: face) : face,
       onStart: () => setState(() {
+        _clearHint();
         _dragCol = col;
         _dragIndex = i;
         _dragFrom = origin;
@@ -492,11 +574,18 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
     Key? slotKey,
   }) {
     final top = cards.isEmpty ? null : cards.last;
+    final slotEmpty = PlayingCardView(
+      width: layout.cardWidth,
+      height: layout.cardHeight,
+      empty: true,
+      highlight: _hintFrom(loc) || _hintTo(loc),
+    );
     Widget face = PlayingCardView(
       width: layout.cardWidth,
       height: layout.cardHeight,
       card: top,
       empty: top == null,
+      highlight: _hintFrom(loc) || _hintTo(loc),
     );
     if (draggable && top != null && !session.busy && !_animating) {
       final data = Move.relocate(loc, loc, 1);
@@ -507,12 +596,15 @@ class _GamePageState extends ConsumerState<GamePage> with WidgetsBindingObserver
       face = _returnDraggable(
         data: data,
         feedback: feedback,
-        childWhenDragging: SizedBox(width: layout.cardWidth, height: layout.cardHeight),
-        child: _hidingPile(loc) ? Opacity(opacity: 0, child: face) : face,
-        onStart: () => setState(() => _dragFrom = loc),
+        childWhenDragging: slotEmpty,
+        child: _hidingPile(loc) ? slotEmpty : face,
+        onStart: () => setState(() {
+          _clearHint();
+          _dragFrom = loc;
+        }),
       );
     } else if (_hidingPile(loc)) {
-      face = Opacity(opacity: 0, child: face);
+      face = slotEmpty;
     }
     return Padding(
       key: slotKey,

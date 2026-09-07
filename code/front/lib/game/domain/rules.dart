@@ -396,4 +396,21 @@ class Rules {
     if (board.waste.isNotEmpty) return Move.recycle();
     return null;
   }
+
+  /// ヒント用。手数に含めない。ソルバ手順は使わない。
+  static Move? hint(Board board) {
+    final relocates = legalRelocates(board);
+    for (final m in relocates) {
+      if (m.to?.pile == Pile.foundation) return m;
+    }
+    for (final m in relocates) {
+      if (m.from?.pile == Pile.tableau && m.to?.pile == Pile.tableau) return m;
+    }
+    for (final m in relocates) {
+      return m;
+    }
+    if (board.stock.isNotEmpty) return Move.draw();
+    if (board.waste.isNotEmpty) return Move.recycle();
+    return null;
+  }
 }

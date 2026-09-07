@@ -40,7 +40,10 @@ class PlayingCardView extends StatelessWidget {
         height: height,
         decoration: BoxDecoration(
           borderRadius: radius,
-          border: Border.all(color: Colors.white38, width: 1.2),
+          border: Border.all(
+            color: highlight ? Colors.amber : Colors.white38,
+            width: highlight ? 2.5 : 1.2,
+          ),
           color: Colors.white10,
         ),
       );

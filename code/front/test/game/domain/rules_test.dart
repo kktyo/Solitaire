@@ -103,6 +103,42 @@ void main() {
     expect(m.type, MoveType.move);
     expect(m.to!.pile, Pile.foundation);
   });
+
+  test('hint prefers foundation then tableau then draw', () {
+    final tab = List.generate(7, (_) => <Card>[]);
+    tab[0] = [Card('AH', true)];
+    tab[1] = [Card('KC', true)];
+    tab[2] = [Card('QH', true)];
+    final board = Board(
+      tableau: tab,
+      foundations: List.generate(4, (_) => <Card>[]),
+      stock: [Card('2C', false)],
+      waste: [],
+    );
+    final h = Rules.hint(board)!;
+    expect(h.type, MoveType.move);
+    expect(h.to!.pile, Pile.foundation);
+
+    tab[0] = [Card('7S', true)];
+    final noAce = Board(
+      tableau: tab,
+      foundations: List.generate(4, (_) => <Card>[]),
+      stock: [Card('2C', false)],
+      waste: [],
+    );
+    final h2 = Rules.hint(noAce)!;
+    expect(h2.type, MoveType.move);
+    expect(h2.from!.pile, Pile.tableau);
+    expect(h2.to!.pile, Pile.tableau);
+
+    final onlyDraw = Board(
+      tableau: List.generate(7, (_) => <Card>[]),
+      foundations: List.generate(4, (_) => <Card>[]),
+      stock: [Card('2C', false)],
+      waste: [],
+    );
+    expect(Rules.hint(onlyDraw)!.type, MoveType.draw);
+  });
 }
 
 Move _move(Map<String, dynamic> n) {
